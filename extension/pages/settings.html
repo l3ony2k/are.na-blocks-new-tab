@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Are.na New Tab Settings</title>
+    <link rel="stylesheet" href="../styles/style.css">
+    <script type="module" src="../scripts/settings.js" defer></script>
+</head>
+<body>
+    <div id="app-shell">
+        <header id="header-bar" hidden>
+            <span>Settings</span>
+        </header>
+        <main id="content-area">
+            <form class="settings-form" id="settings-form">
+                <fieldset>
+                    <legend>Content Sources</legend>
+                    <label class="setting-label" for="channel-slugs">Channel slugs</label>
+                    <textarea id="channel-slugs" name="channelSlugs" placeholder="design-inspiration, architectural-brutalism"></textarea>
+                    <span class="notice">Comma-separated Are.na channel slugs. Leave blank if you only want specific block IDs.</span>
+
+                    <label class="setting-label" for="block-ids">Block IDs</label>
+                    <textarea id="block-ids" name="blockIds" placeholder="12345, 67890"></textarea>
+                    <span class="notice">Comma-separated Are.na block IDs (numbers). Optional.</span>
+
+                    <div class="settings-actions">
+                        <button class="button" type="button" id="test-sources">Test sources</button>
+                        <button class="button" type="button" id="refresh-sources">Refresh cache</button>
+                        <span class="notice" id="cache-info">Cache idle</span>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Display</legend>
+                    <label class="setting-label" for="block-count">Number of blocks</label>
+                    <input id="block-count" name="blockCount" type="number" min="1" max="6" step="1" value="3">
+                    <span class="notice">Choose how many random blocks are shown each time you open a new tab.</span>
+
+                    <label class="inline">
+                        <input type="checkbox" id="show-header" name="showHeader" checked>
+                        <span>Show header with bookmarks</span>
+                    </label>
+                    <label class="inline">
+                        <input type="checkbox" id="show-footer" name="showFooter" checked>
+                        <span>Show footer information</span>
+                    </label>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Content filters</legend>
+                    <label class="inline"><input type="checkbox" name="filters" value="Image"> <span>Image</span></label>
+                    <label class="inline"><input type="checkbox" name="filters" value="Text"> <span>Text</span></label>
+                    <label class="inline"><input type="checkbox" name="filters" value="Link"> <span>Link</span></label>
+                    <label class="inline"><input type="checkbox" name="filters" value="Attachment"> <span>Attachment</span></label>
+                    <label class="inline"><input type="checkbox" name="filters" value="Embed"> <span>Embed</span></label>
+                    <label class="inline"><input type="checkbox" name="filters" value="Channel"> <span>Channel</span></label>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Theme</legend>
+                    <label class="inline"><input type="radio" name="theme" value="system" checked> <span>System</span></label>
+                    <label class="inline"><input type="radio" name="theme" value="light"> <span>Light</span></label>
+                    <label class="inline"><input type="radio" name="theme" value="dark"> <span>Dark</span></label>
+                </fieldset>
+
+                <div class="settings-actions">
+                    <button class="button" type="submit">Save settings</button>
+                    <button class="button" type="reset">Reset</button>
+                    <a class="button" href="new-tab.html" target="_blank" rel="noopener">Open new tab preview</a>
+                </div>
+            </form>
+        </main>
+        <footer id="footer-bar">
+            <span>Are.na New Tab · Settings</span>
+            <a href="https://github.com/leon" target="_blank" rel="noopener">Project repo</a>
+        </footer>
+    </div>
+</body>
+</html>

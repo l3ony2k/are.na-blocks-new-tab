@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Are.na Blocks New Tab",
+  "description": "Replace the new tab page with curated Are.na blocks using your favorite channels and custom settings.",
+  "version": "0.1.0",
+  "chrome_url_overrides": {
+    "newtab": "pages/new-tab.html"
+  },
+  "options_ui": {
+    "page": "pages/settings.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "storage",
+    "bookmarks"
+  ],
+  "host_permissions": [
+    "https://api.are.na/*"
+  ],
+  "background": {
+    "service_worker": "scripts/background.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  }
+}
