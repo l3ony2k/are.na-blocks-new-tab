@@ -70,10 +70,11 @@ async function updateCacheMeta(meta) {
             payload: meta
         });
     } catch (error) {
-        const message = error?.message || "";
-        if (!message.includes("Receiving end")) {
-            console.warn("cacheStatus broadcast failed", error);
+        const message = (error && error.message) || "";
+        if (/receiving end/i.test(message) || /message port closed/i.test(message)) {
+            return;
         }
+        console.warn("cacheStatus broadcast failed", error);
     }
 }
 

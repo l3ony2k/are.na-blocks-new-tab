@@ -363,12 +363,6 @@ function formatMeta(block) {
     return parts.join(" Â· ");
 }
 
-        return date.toISOString().slice(0, 10);
-    } catch (_) {
-        return "";
-    }
-}
-
 function updateCacheStatus() {
     if (!elements.cacheLabel) {
         return;
@@ -387,7 +381,7 @@ function updateCacheStatus() {
             const timestamp = state.cacheMeta.lastUpdated || state.cache?.fetchedAt;
             const blockCount = state.cacheMeta.blockCount ?? state.cache?.blockIds?.length ?? 0;
             if (timestamp && blockCount) {
-                elements.cacheLabel.textContent = `${blockCount} block${blockCount === 1 ? "" : "s"} · ${formatRelativeTime(timestamp)}`;
+                elements.cacheLabel.textContent = `${blockCount} block${blockCount === 1 ? "" : "s"} - ${formatRelativeTime(timestamp)}`;
             } else if (timestamp) {
                 elements.cacheLabel.textContent = `Cached ${formatRelativeTime(timestamp)}`;
             } else {
@@ -397,20 +391,6 @@ function updateCacheStatus() {
     }
 }
 
-    const minutes = Math.floor(delta / 60000);
-    if (minutes < 1) {
-        return "just now";
-    }
-    if (minutes < 60) {
-        return `${minutes} min ago`;
-    }
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) {
-        return `${hours} hr${hours === 1 ? "" : "s"} ago`;
-    }
-    const days = Math.floor(hours / 24);
-    return `${days} day${days === 1 ? "" : "s"} ago`;
-}
 
 async function handleRefreshClick() {
     renderBlocks();
