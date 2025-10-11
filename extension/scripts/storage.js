@@ -1,5 +1,5 @@
 import { storage } from "./extension-api.js";
-import { STORAGE_KEYS, DEFAULT_SETTINGS, CACHE_VERSION } from "./constants.js";
+import { STORAGE_KEYS, DEFAULT_SETTINGS, CACHE_VERSION, TILE_SIZE_OPTIONS } from "./constants.js";
 
 const DEFAULT_CACHE = {
     version: CACHE_VERSION,
@@ -45,7 +45,8 @@ export async function getSettings() {
         ...DEFAULT_SETTINGS,
         ...stored,
         channelSlugs: Array.isArray(stored.channelSlugs) ? stored.channelSlugs : normalizeCommaList(stored.channelSlugs),
-        blockIds: Array.isArray(stored.blockIds) ? stored.blockIds : parseBlockIds(stored.blockIds)
+        blockIds: Array.isArray(stored.blockIds) ? stored.blockIds : parseBlockIds(stored.blockIds),
+        tileSize: TILE_SIZE_OPTIONS.includes(stored.tileSize) ? stored.tileSize : DEFAULT_SETTINGS.tileSize
     };
 }
 
@@ -58,7 +59,8 @@ export async function saveSettings(settings) {
             : [],
         blockIds: Array.isArray(settings.blockIds)
             ? settings.blockIds.map((id) => `${id}`.trim()).filter(Boolean)
-            : []
+            : [],
+        tileSize: TILE_SIZE_OPTIONS.includes(settings.tileSize) ? settings.tileSize : DEFAULT_SETTINGS.tileSize
     };
     await storage.set({
         [STORAGE_KEYS.settings]: payload

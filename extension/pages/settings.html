@@ -37,6 +37,17 @@
                     <input id="block-count" name="blockCount" type="number" min="1" max="6" step="1" value="3">
                     <span class="notice">Choose how many random blocks are shown each time you open a new tab.</span>
 
+                    <label class="setting-label" for="tile-size">Block size</label>
+                    <select id="tile-size" name="tileSize">
+                        <option value="auto">Auto</option>
+                        <option value="xs">XS</option>
+                        <option value="s">S</option>
+                        <option value="m">M</option>
+                        <option value="l">L</option>
+                        <option value="xl">XL</option>
+                    </select>
+                    <span class="notice">Auto adapts to the viewport; XS–XL lock in a fixed tile size.</span>
+
                     <label class="inline">
                         <input type="checkbox" id="show-header" name="showHeader" checked>
                         <span>Show header with bookmarks</span>

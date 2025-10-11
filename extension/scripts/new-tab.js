@@ -1,10 +1,23 @@
-import { CACHE_STATE, MESSAGES, STORAGE_KEYS } from "./constants.js";
+import { CACHE_STATE, MESSAGES, STORAGE_KEYS, TILE_SIZE_OPTIONS } from "./constants.js";
 import { formatRelativeTime, formatExactDate } from "./time.js";
 import { bookmarks, runtime, storage } from "./extension-api.js";
 import { chooseRandomBlocks } from "./arena.js";
 import { getCache, getSettings } from "./storage.js";
 import { applyTheme } from "./theme.js";
 import { toPlainText } from "./sanitize.js";
+
+const TILE_SIZE_MAP = {
+    xs: 180,
+    s: 220,
+    m: 260,
+    l: 320,
+    xl: 380
+};
+
+const AUTO_TILE_SIZES = [360, 320, 280, 240, 200, 180];
+const TILE_GAP = 18;
+const INFO_HEIGHT = 150;
+const RESIZE_DEBOUNCE = 150;
 
 const state = {
     settings: null,
@@ -14,10 +27,12 @@ const state = {
         lastUpdated: 0,
         lastError: null,
         blockCount: 0
-    }
+    },
+    currentBlocks: []
 };
 
 const elements = {
+    contentArea: document.getElementById("content-area"),
     header: document.getElementById("header-bar"),
     footer: document.getElementById("footer-bar"),
     bookmarkStrip: document.getElementById("bookmark-strip"),
@@ -28,6 +43,8 @@ const elements = {
     emptyTemplate: document.querySelector("[data-empty-state]"),
     bookmarkEmptyTemplate: document.getElementById("bookmark-empty-template")
 };
+
+let resizeTimer = null;
 
 async function init() {
     try {
@@ -56,6 +73,7 @@ function wireEvents() {
     if (runtime?.onMessage) {
         runtime.onMessage.addListener(handleRuntimeMessage);
     }
+    window.addEventListener("resize", handleResize, { passive: true });
 }
 
 async function renderAll() {
@@ -103,7 +121,6 @@ async function renderBookmarks() {
             } else {
                 strip.textContent = "No bookmarks";
             }
-            strip.classList.remove("scrolling");
             return;
         }
         for (const item of collected) {
@@ -111,8 +128,6 @@ async function renderBookmarks() {
         }
         if (strip.scrollWidth > strip.clientWidth) {
             strip.classList.add("scrolling");
-        } else {
-            strip.classList.remove("scrolling");
         }
     } catch (error) {
         console.error("Failed to load bookmarks", error);
@@ -161,59 +176,296 @@ function createBookmarkNode(node) {
 }
 
 function renderBlocks() {
-    if (!elements.blocksContainer) {
+    const container = elements.blocksContainer;
+    if (!container) {
         return;
     }
-    elements.blocksContainer.innerHTML = "";
+
+    container.innerHTML = "";
 
     if (!state.cache?.blockIds?.length) {
+        state.currentBlocks = [];
         state.cacheMeta.blockCount = 0;
         showEmptyState();
         return;
     }
 
-    state.cacheMeta.blockCount = state.cache.blockIds.length;
-
     const blockCount = Math.max(1, Number(state.settings?.blockCount) || 1);
     const blocks = chooseRandomBlocks(state.cache, blockCount);
     if (!blocks.length) {
+        state.currentBlocks = [];
         showEmptyState();
         return;
     }
 
-    elements.blocksContainer.classList.remove("is-empty");
-    for (const block of blocks) {
-        const node = renderBlockCard(block);
-        elements.blocksContainer.appendChild(node);
+    state.currentBlocks = blocks;
+    state.cacheMeta.blockCount = state.cache?.blockIds?.length ?? blocks.length;
+    renderLayout(blocks);
+}
+
+function renderLayout(blocks) {
+    const container = elements.blocksContainer;
+    const contentArea = elements.contentArea;
+    if (!container || !contentArea) {
+        return;
+    }
+
+    if (!blocks || !blocks.length) {
+        state.currentBlocks = [];
+        showEmptyState();
+        return;
+    }
+
+    container.classList.remove("is-empty");
+    container.innerHTML = "";
+
+    const viewport = getViewport();
+    const { tileSize, layout } = determineLayout(blocks.length, viewport);
+
+    container.style.setProperty("--tile-size", `${tileSize}px`);
+    container.style.setProperty("--tile-gap", `${TILE_GAP}px`);
+
+    let index = 0;
+    layout.rows.forEach((columns) => {
+        const row = document.createElement("div");
+        row.className = "block-row";
+        row.dataset.columns = String(columns);
+        for (let i = 0; i < columns && index < blocks.length; i += 1) {
+            row.appendChild(renderBlockCard(blocks[index]));
+            index += 1;
+        }
+        container.appendChild(row);
+    });
+
+    while (index < blocks.length) {
+        const fallbackRow = document.createElement("div");
+        fallbackRow.className = "block-row";
+        fallbackRow.dataset.columns = "1";
+        fallbackRow.appendChild(renderBlockCard(blocks[index]));
+        container.appendChild(fallbackRow);
+        index += 1;
+    }
+
+    requestAnimationFrame(() => applyOverflowStates(layout));
+    updateCacheStatus();
+}
+
+function determineLayout(count, viewport) {
+    const requested = state.settings?.tileSize && TILE_SIZE_OPTIONS.includes(state.settings.tileSize)
+        ? state.settings.tileSize
+        : "auto";
+
+    if (requested !== "auto") {
+        const baseSize = TILE_SIZE_MAP[requested] || TILE_SIZE_MAP.m;
+        const tileSize = clampTileSize(baseSize, viewport);
+        const layout = chooseLayout(count, viewport, tileSize);
+        return { tileSize, layout };
+    }
+
+    for (const candidate of AUTO_TILE_SIZES) {
+        const tileSize = clampTileSize(candidate, viewport);
+        const layout = chooseLayout(count, viewport, tileSize);
+        if (layout.fitsWidth && layout.fitsHeight) {
+            return { tileSize, layout };
+        }
+    }
+
+    const fallbackSize = clampTileSize(AUTO_TILE_SIZES[AUTO_TILE_SIZES.length - 1], viewport);
+    return { tileSize: fallbackSize, layout: chooseLayout(count, viewport, fallbackSize) };
+}
+
+function chooseLayout(count, viewport, tileSize) {
+    if (count <= 0) {
+        return { rows: [], requiredWidth: 0, requiredHeight: 0, fitsWidth: true, fitsHeight: true };
+    }
+
+    const widthFor = (cols) => cols * tileSize + (cols - 1) * TILE_GAP;
+    const heightForRows = (rows) => rows * (tileSize + INFO_HEIGHT) + (rows - 1) * TILE_GAP;
+
+    const fitsColumns = (cols) => widthFor(cols) <= viewport.width;
+    const fitsRows = (rows) => heightForRows(rows) <= viewport.height;
+
+    const ratio = viewport.width / Math.max(viewport.height, 1);
+    const superThin = viewport.width < widthFor(2);
+    const superWide = viewport.height < heightForRows(2);
+
+    let rows;
+
+    switch (count) {
+        case 1:
+            rows = [1];
+            break;
+        case 2:
+            rows = (ratio >= 1 && fitsColumns(2)) ? [2] : [1, 1];
+            break;
+        case 3:
+            if (ratio >= 1 && fitsColumns(3)) {
+                rows = [3];
+            } else if (ratio >= 1 && fitsColumns(2)) {
+                rows = [2, 1];
+            } else {
+                rows = [1, 1, 1];
+            }
+            break;
+        case 4:
+            if (superThin) {
+                rows = [1, 1, 1, 1];
+            } else if (superWide && fitsColumns(4)) {
+                rows = [4];
+            } else if (fitsColumns(2) && fitsRows(2)) {
+                rows = [2, 2];
+            } else if (fitsColumns(2)) {
+                rows = [2, 1, 1];
+            } else {
+                rows = [1, 1, 1, 1];
+            }
+            break;
+        case 5:
+            if (superThin) {
+                rows = [1, 1, 1, 1, 1];
+            } else if (superWide && fitsColumns(5)) {
+                rows = [5];
+            } else if (fitsColumns(2) && !fitsColumns(3)) {
+                rows = [2, 2, 1];
+            } else if (fitsColumns(3) && fitsRows(2)) {
+                rows = [3, 2];
+            } else if (fitsColumns(3) && fitsRows(3)) {
+                rows = [2, 2, 1];
+            } else if (fitsColumns(2)) {
+                rows = [2, 2, 1];
+            } else {
+                rows = [1, 1, 1, 1, 1];
+            }
+            break;
+        case 6:
+            if (superThin) {
+                rows = [1, 1, 1, 1, 1, 1];
+            } else if (superWide && fitsColumns(6)) {
+                rows = [6];
+            } else {
+                const canThreeCols = fitsColumns(3);
+                const canTwoCols = fitsColumns(2);
+                const preferWide = ratio >= 1;
+                if (canThreeCols && preferWide && fitsRows(2)) {
+                    rows = [3, 3];
+                } else if (canThreeCols && !canTwoCols && fitsRows(2)) {
+                    rows = [3, 3];
+                } else if (canTwoCols && fitsRows(3)) {
+                    rows = [2, 2, 2];
+                } else if (canThreeCols) {
+                    rows = [3, 3];
+                } else if (canTwoCols) {
+                    rows = [2, 2, 2];
+                } else {
+                    rows = [1, 1, 1, 1, 1, 1];
+                }
+            }
+            break;
+        default:
+            rows = Array.from({ length: count }, () => 1);
+            break;
+    }
+
+    const rowWidths = rows.map((cols) => widthFor(cols));
+    const requiredWidth = Math.max(...rowWidths);
+    const requiredHeight = heightForRows(rows.length);
+
+    return {
+        rows,
+        requiredWidth,
+        requiredHeight,
+        fitsWidth: requiredWidth <= viewport.width,
+        fitsHeight: requiredHeight <= viewport.height
+    };
+}
+
+function clampTileSize(size, viewport) {
+    const maxWidth = Math.max(120, viewport.width - 32);
+    const maxHeight = Math.max(120, viewport.height - INFO_HEIGHT - 48);
+    const limited = Math.min(size, maxWidth, maxHeight);
+    return Math.max(120, Math.floor(limited));
+}
+
+function getViewport() {
+    const area = elements.contentArea;
+    if (!area) {
+        return { width: window.innerWidth, height: window.innerHeight };
+    }
+    const width = area.clientWidth || window.innerWidth;
+    const height = area.clientHeight || window.innerHeight;
+    return { width, height };
+}
+
+function applyOverflowStates(layout) {
+    const contentArea = elements.contentArea;
+    const container = elements.blocksContainer;
+    if (!contentArea || !container) {
+        return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const areaHeight = contentArea.clientHeight;
+    const areaWidth = contentArea.clientWidth;
+
+    const verticalOverflow = containerRect.height > areaHeight + 1;
+    const horizontalOverflow = containerRect.width > areaWidth + 1;
+
+    contentArea.classList.toggle("is-scroll-y", verticalOverflow);
+    contentArea.classList.toggle("is-scroll-x", horizontalOverflow);
+
+    contentArea.style.overflowY = verticalOverflow ? "auto" : "hidden";
+    contentArea.style.overflowX = horizontalOverflow ? "auto" : "hidden";
+
+    if (!verticalOverflow) {
+        contentArea.scrollTop = 0;
+    }
+    if (!horizontalOverflow) {
+        contentArea.scrollLeft = 0;
     }
 }
 
 function showEmptyState() {
-    elements.blocksContainer.classList.add("is-empty");
+    state.currentBlocks = [];
+    const container = elements.blocksContainer;
+    const contentArea = elements.contentArea;
+    if (!container || !contentArea) {
+        return;
+    }
+    container.classList.add("is-empty");
+    container.innerHTML = "";
     if (elements.emptyTemplate) {
-        elements.blocksContainer.appendChild(elements.emptyTemplate.cloneNode(true));
+        container.appendChild(elements.emptyTemplate.cloneNode(true));
     } else {
         const fallback = document.createElement("div");
         fallback.className = "block-empty";
         fallback.textContent = "No cached blocks yet. Configure sources in settings.";
-        elements.blocksContainer.appendChild(fallback);
+        container.appendChild(fallback);
     }
+    contentArea.classList.remove("is-scroll-y", "is-scroll-x");
+    contentArea.style.overflow = "hidden";
+    contentArea.style.overflowX = "hidden";
+    contentArea.style.overflowY = "hidden";
+    updateCacheStatus();
 }
 
 function renderBlockCard(block) {
+    let article;
     if (elements.blockTemplate?.content) {
         const fragment = elements.blockTemplate.content.cloneNode(true);
-        const article = fragment.querySelector("article");
+        article = fragment.querySelector("article");
         populateCard(article, block);
-        return fragment;
     }
-    return buildFallbackCard(block);
+    if (!article) {
+        article = buildFallbackCard(block);
+    }
+    return article;
 }
 
 function populateCard(article, block) {
     if (!article) {
         return;
     }
+    article.dataset.blockId = block.id;
     const main = article.querySelector("[data-main]");
     const titleEl = article.querySelector(".block-title");
     const descriptionEl = article.querySelector(".block-description");
@@ -225,14 +477,14 @@ function populateCard(article, block) {
         buildMainContent(main, block);
     }
 
-    const title = block.title || `Block ${block.id}`;
     if (titleEl) {
-        titleEl.textContent = title;
+        titleEl.textContent = block.title || `Block ${block.id}`;
     }
 
     if (descriptionEl) {
-        if (block.descriptionText) {
-            descriptionEl.textContent = block.descriptionText;
+        const text = block.descriptionText?.trim();
+        if (text) {
+            descriptionEl.textContent = text;
             descriptionEl.classList.remove("is-empty");
         } else {
             descriptionEl.textContent = "";
@@ -241,8 +493,7 @@ function populateCard(article, block) {
     }
 
     if (dateEl) {
-        const exact = formatExactDate(block.createdAt);
-        dateEl.textContent = exact || "";
+        dateEl.textContent = formatExactDate(block.createdAt) || "";
     }
 
     if (typeEl) {
@@ -260,44 +511,42 @@ function buildFallbackCard(block) {
 
     const main = document.createElement("div");
     main.className = "block-main";
-    buildMainContent(main, block);
+    main.dataset.main = "";
+    article.appendChild(main);
 
     const info = document.createElement("div");
     info.className = "block-info";
 
     const titleEl = document.createElement("h2");
     titleEl.className = "block-title";
-    titleEl.textContent = block.title || `Block ${block.id}`;
+    info.appendChild(titleEl);
 
     const descriptionEl = document.createElement("p");
     descriptionEl.className = "block-description";
-    if (block.descriptionText) {
-        descriptionEl.textContent = block.descriptionText;
-    } else {
-        descriptionEl.classList.add("is-empty");
-    }
+    info.appendChild(descriptionEl);
 
     const metaRow = document.createElement("div");
     metaRow.className = "block-meta-row";
 
     const dateEl = document.createElement("span");
     dateEl.className = "block-date";
-    dateEl.textContent = formatExactDate(block.createdAt) || "";
+    metaRow.appendChild(dateEl);
 
     const linkEl = document.createElement("a");
     linkEl.className = "block-link";
-    linkEl.href = `https://www.are.na/block/${block.id}`;
     linkEl.target = "_blank";
     linkEl.rel = "noopener";
     linkEl.textContent = "View on Are.na";
+    metaRow.appendChild(linkEl);
 
     const typeEl = document.createElement("span");
     typeEl.className = "block-type";
-    typeEl.textContent = block.type || "Block";
+    metaRow.appendChild(typeEl);
 
-    metaRow.append(dateEl, linkEl, typeEl);
-    info.append(titleEl, descriptionEl, metaRow);
-    article.append(main, info);
+    info.appendChild(metaRow);
+    article.appendChild(info);
+
+    populateCard(article, block);
     return article;
 }
 
@@ -321,7 +570,7 @@ function buildMainContent(container, block) {
         content.className = "tile-text-content";
         const raw = block.contentHtml || block.descriptionHtml;
         const textContent = raw ? toPlainText(raw) : block.descriptionText || block.title || "Text";
-        content.textContent = textContent.trim();
+        content.textContent = textContent.trim() || "Text";
         wrapper.appendChild(content);
         container.appendChild(wrapper);
         return;
@@ -406,7 +655,11 @@ function handleStorageChange(changes, area) {
             state.settings = settings;
             applyTheme(state.settings.theme);
             toggleRegions();
-            renderBlocks();
+            if (state.currentBlocks.length) {
+                renderLayout(state.currentBlocks);
+            } else {
+                renderBlocks();
+            }
             renderBookmarks();
         });
     }
@@ -428,7 +681,18 @@ function handleRuntimeMessage(message) {
     return false;
 }
 
+function handleResize() {
+    if (!state.currentBlocks.length) {
+        return;
+    }
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        renderLayout(state.currentBlocks);
+    }, RESIZE_DEBOUNCE);
+}
+
 function renderError(error) {
+    state.currentBlocks = [];
     if (!elements.blocksContainer) {
         return;
     }

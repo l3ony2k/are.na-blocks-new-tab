@@ -49,9 +49,10 @@ All extension files live under `extension/`. The top-level `docs/` directory sti
 2. Provide one or more Are.na channel slugs (comma-separated) in **Channel slugs**. Example: `design-inspiration, architectural-brutalism`.
 3. Optionally list individual block IDs if you want to seed specific blocks.
 4. Choose the number of blocks to surface per tab (1–6).
-5. Pick the block types you want included. The UI defaults to Images only so the mosaic stays visual, but you can include additional types as needed.
-6. Toggle the header/footer visibility and theme to match your preference.
-7. Click **Save settings**. The background service worker fetches content from Are.na, caches the results, and broadcasts status back to the UI (look for the cache badge in the footer).
+5. Select a block size preset. **Auto** adapts to the viewport, while XS–XL lock the square tile to a fixed dimension.
+6. Pick the block types you want included. The UI defaults to Images only so the mosaic stays visual, but you can include additional types as needed.
+7. Toggle the header/footer visibility and theme to match your preference.
+8. Click **Save settings**. The background service worker fetches content from Are.na, caches the results, and broadcasts status back to the UI (look for the cache badge in the footer).
 
 > **Tip:** Use **Test sources** first if you’re unsure your slugs/IDs are valid. The extension will perform a dry run and show how many blocks it would cache, without overwriting existing data.
 

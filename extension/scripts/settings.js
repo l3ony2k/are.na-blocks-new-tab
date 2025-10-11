@@ -20,6 +20,7 @@ const elements = {
     channelSlugs: document.getElementById("channel-slugs"),
     blockIds: document.getElementById("block-ids"),
     blockCount: document.getElementById("block-count"),
+    tileSize: document.getElementById("tile-size"),
     showHeader: document.getElementById("show-header"),
     showFooter: document.getElementById("show-footer"),
     filters: document.querySelectorAll("input[name='filters']"),
@@ -53,6 +54,7 @@ function populateForm() {
     elements.channelSlugs.value = state.settings.channelSlugs.join(", ");
     elements.blockIds.value = state.settings.blockIds.join(", ");
     elements.blockCount.value = state.settings.blockCount;
+    elements.tileSize.value = state.settings.tileSize;
     elements.showHeader.checked = state.settings.showHeader;
     elements.showFooter.checked = state.settings.showFooter;
 
@@ -95,6 +97,7 @@ function gatherFormSettings() {
     blockCount = Math.min(6, Math.max(1, blockCount));
     const showHeader = elements.showHeader.checked;
     const showFooter = elements.showFooter.checked;
+    const tileSize = elements.tileSize?.value || DEFAULT_SETTINGS.tileSize;
     let filters = Array.from(document.querySelectorAll("input[name='filters']:checked"), (input) => input.value);
     if (!filters.length) {
         filters = [...BLOCK_TYPES];
@@ -102,7 +105,7 @@ function gatherFormSettings() {
     const themeRadio = document.querySelector("input[name='theme']:checked");
     const theme = themeRadio ? themeRadio.value : DEFAULT_SETTINGS.theme;
 
-    return { channelSlugs, blockIds, blockCount, showHeader, showFooter, filters, theme };
+    return { channelSlugs, blockIds, blockCount, showHeader, showFooter, filters, theme, tileSize };
 }
 
 async function handleSubmit(event) {
@@ -196,7 +199,7 @@ function updateWorking(isWorking, message) {
         elements.refreshButton.disabled = isWorking;
     }
     if (elements.form) {
-        elements.form.querySelectorAll("button, input, textarea").forEach((node) => {
+        elements.form.querySelectorAll("button, input, textarea, select").forEach((node) => {
             if (node.dataset.persistent === "true") {
                 return;
             }

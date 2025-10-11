@@ -11,7 +11,8 @@ export const DEFAULT_SETTINGS = {
     showHeader: true,
     showFooter: true,
     filters: ["Image"],
-    theme: "system"
+    theme: "system",
+    tileSize: "auto"
 };
 
 export const CACHE_VERSION = 1;
@@ -31,3 +32,6 @@ export const MESSAGES = {
     cacheStatus: "arena-cache-status",
     themeChanged: "arena-theme-changed"
 };
+
+export const TILE_SIZE_OPTIONS = ["auto", "xs", "s", "m", "l", "xl"];
+
