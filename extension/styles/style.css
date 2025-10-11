@@ -108,10 +108,10 @@ body ::-moz-selection {
     border-bottom: 1px solid var(--header-border);
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     padding: 5px 12px;
     flex-shrink: 0;
-    gap: 16px;
+    gap: 12px;
 }
 
 #header-bar[hidden] {
@@ -157,12 +157,6 @@ body ::-moz-selection {
     padding-bottom: 4px;
 }
 
-#header-actions {
-    display: flex;
-    gap: 10px;
-    flex-shrink: 0;
-}
-
 .button {
     background-color: var(--button-bg);
     border: 1px solid var(--block-border);
@@ -184,93 +178,170 @@ body ::-moz-selection {
 /* --- Main Content ---------------------------------------------------------- */
 #content-area {
     flex: 1;
+    padding: 24px;
+}
+
+body[data-page="new-tab"] #content-area {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    overflow: auto;
+}
+
+body[data-page="settings"] #content-area {
+    display: block;
     overflow-y: auto;
-    overflow-x: hidden;
-    padding: 40px 20px;
 }
 
-#blocks-container {
-    max-width: 960px;
-    margin: 0 auto;
+body[data-page="new-tab"] #blocks-container {
+    width: min(90vw, 1100px);
     display: grid;
-    gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-auto-rows: minmax(260px, auto);
+    grid-auto-flow: dense;
+    gap: 18px;
+    align-content: start;
+    justify-content: center;
+    margin: 0 auto;
+    padding: 10px 0;
 }
 
+body[data-page="settings"] #blocks-container {
+    width: 100%;
+}
+
+
+#blocks-container.is-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#blocks-container.is-empty .block-empty {
+    max-width: 320px;
+}
 .block-card {
     background-color: var(--block-bg);
     border: 1px solid var(--block-border);
-    padding: 18px 22px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    box-shadow: 8px 8px 0 var(--shadow-color);
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 12px;
+    overflow: hidden;
 }
 
-.block-card header {
+.block-main {
+    position: relative;
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    aspect-ratio: 1 / 1;
+    min-height: 220px;
+}
+
+.block-main img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border: 1px solid var(--block-border);
+    background-color: var(--block-bg);
+}
+
+.block-main .text-tile {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 24px;
+    font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    font-size: 1.6rem;
+    line-height: 1.4;
+    text-align: left;
+    border: 1px solid var(--block-border);
+    background-color: var(--block-bg);
+    overflow: auto;
+}
+
+.block-main .tile-text-content {
+    width: 100%;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.block-main .tile-chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--block-border);
+    font-size: 0.85rem;
+    text-align: center;
+    background-color: var(--block-bg);
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 1 / 1;
+    line-height: 1.2;
+    white-space: pre-wrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    padding: 16px;
+}
+
+.block-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .block-title {
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 600;
     margin: 0;
-}
-
-.block-meta {
-    color: var(--meta-color);
-    font-size: 0.85rem;
-    margin: 0;
-}
-
-.block-meta span {
-    display: inline-block;
-    margin-right: 12px;
-}
-
-.block-body {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    line-height: 1.5;
-}
-
-.block-body img,
-.block-body video,
-.block-body iframe {
-    max-width: 100%;
-    border: 1px solid var(--block-border);
-}
-
-.block-body pre,
-.block-body code {
-    background-color: var(--button-bg);
-    border: 1px solid var(--block-border);
-    padding: 10px;
-    overflow-x: auto;
-    font-size: 0.9rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .block-description {
-    white-space: pre-wrap;
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    opacity: 0.9;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.block-footer {
+.block-description.is-empty {
+    display: none;
+}
+
+.block-meta-row {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     gap: 12px;
+    font-size: 0.7rem;
+    color: var(--meta-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
-.block-footer a {
-    color: var(--link-color);
+.block-meta-row a {
+    color: inherit;
     text-decoration: none;
 }
 
-.block-footer a:hover,
-.block-footer a:focus-visible {
+.block-meta-row a:hover,
+.block-meta-row a:focus-visible {
     text-decoration: underline;
     outline: none;
 }
@@ -280,6 +351,8 @@ body ::-moz-selection {
     padding: 18px;
     text-align: center;
     font-size: 0.9rem;
+    align-self: center;
+    justify-self: center;
 }
 
 /* --- Footer ---------------------------------------------------------------- */
@@ -292,21 +365,11 @@ body ::-moz-selection {
     justify-content: space-between;
     padding: 5px 12px;
     flex-shrink: 0;
+    gap: 12px;
 }
 
 #footer-bar[hidden] {
     display: none;
-}
-
-#footer-bar a {
-    color: var(--link-color);
-    text-decoration: none;
-}
-
-#footer-bar a:hover,
-#footer-bar a:focus-visible {
-    text-decoration: underline;
-    outline: none;
 }
 
 /* --- Settings Form --------------------------------------------------------- */
@@ -422,22 +485,62 @@ textarea {
 }
 
 @media (max-width: 720px) {
+
     #header-bar,
+
     #footer-bar {
-        padding: 5px 10px;
+
+        padding: 5px 8px;
+
     }
+
+
+
+    #content-area {
+
+        padding: 16px;
+
+        overflow-y: auto;
+
+    }
+
+
+
+    #blocks-container {
+
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+
+        gap: 12px;
+
+    }
+
+
 
     .block-card {
-        padding: 16px;
+
+        padding: 10px;
+
     }
 
-    .block-footer {
-        flex-direction: column;
-        align-items: flex-start;
+
+
+    .block-main .text-tile {
+
+        padding: 16px;
+
+        font-size: 1.4rem;
+
     }
+
+
 
     .settings-actions {
+
         flex-direction: column;
+
         align-items: flex-start;
+
     }
+
 }
+

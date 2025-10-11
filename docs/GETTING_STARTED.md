@@ -34,7 +34,7 @@ All extension files live under `extension/`. The top-level `docs/` directory sti
 1. Open `chrome://extensions/`.
 2. Enable **Developer mode** (top-right toggle).
 3. Click **Load unpacked** and select the `extension/` directory in this repository.
-4. Open a new tab to verify the Are.na layout loads. Use the **Settings** button in the header to configure your sources.
+4. Open a new tab to verify the Are.na layout loads. Use the **Settings** button in the footer to configure your sources.
 
 ### Firefox
 
@@ -49,7 +49,7 @@ All extension files live under `extension/`. The top-level `docs/` directory sti
 2. Provide one or more Are.na channel slugs (comma-separated) in **Channel slugs**. Example: `design-inspiration, architectural-brutalism`.
 3. Optionally list individual block IDs if you want to seed specific blocks.
 4. Choose the number of blocks to surface per tab (1–6).
-5. Pick the block types you want included. Leaving everything checked mirrors Are.na’s default types.
+5. Pick the block types you want included. The UI defaults to Images only so the mosaic stays visual, but you can include additional types as needed.
 6. Toggle the header/footer visibility and theme to match your preference.
 7. Click **Save settings**. The background service worker fetches content from Are.na, caches the results, and broadcasts status back to the UI (look for the cache badge in the footer).
 
@@ -57,14 +57,14 @@ All extension files live under `extension/`. The top-level `docs/` directory sti
 
 ## What to Expect on the New Tab
 
-- Header bar: Mirrors the typography and height from `style-ref.css`, and shows a horizontal strip of your bookmark bar entries. If you store bookmarks inside folders, the first level of bookmark children is flattened so the strip always has something to show.
-- Main content: Random blocks pulled from the cached pool. Each card includes the block title, type/channel metadata, sanitized content (text/images/attachments), and an “Open in Are.na” link. “Show another” swaps a single block without refreshing the page.
-- Footer: Displays extension version info and a live cache badge. When the background worker is refreshing data, the LED flips to an “active” state and the label switches to “Refreshing cache”.
+- Header bar: Matches the 35px treatment from `style-ref.css` and presents your bookmark bar entries edge to edge. Nested folders are flattened so the strip never feels empty.
+- Mosaic content: Blocks tile into a single-screen grid. Each card dedicates the upper square to the block’s primary media—images sit inside bordered frames without cropping while text blocks render in a scrollable serif square—followed by a clamped title, short description, and a meta row containing the date, block type, and a View on Are.na link.
+- Footer: Only two elements remain—an always-on cache badge and the **Settings** button for deeper customisation. The badge flips to “Refreshing cache” whenever the service worker is rebuilding data.
 
 ## Refresh & Caching Model
 
 - **Initial fetch**: Triggered automatically after a successful save in settings.
-- **Manual refresh**: Click **Refresh cache** in settings or use the **Refresh** button on the new tab to pull a new set of random blocks from the existing cache.
+- **Manual refresh**: Click **Refresh cache** in settings to pull a fresh set of random blocks.
 - **Storage**: `chrome.storage.local` holds both settings (`settings`) and cache data (`blockCache` + `blockCacheMeta`). Cache meta tracks state, last updated timestamp, and block counts.
 - **API usage**: Only public Are.na endpoints are used. If a channel is private or rate-limited, the refresh job surfaces the error message in the UI.
 

@@ -2,8 +2,9 @@ import { CACHE_STATE, MESSAGES, STORAGE_KEYS } from "./constants.js";
 import { formatRelativeTime, formatExactDate } from "./time.js";
 import { bookmarks, runtime, storage } from "./extension-api.js";
 import { chooseRandomBlocks } from "./arena.js";
-import { getCache, getSettings, saveSettings } from "./storage.js";
-import { applyTheme, nextTheme } from "./theme.js";
+import { getCache, getSettings } from "./storage.js";
+import { applyTheme } from "./theme.js";
+import { toPlainText } from "./sanitize.js";
 
 const state = {
     settings: null,
@@ -11,9 +12,9 @@ const state = {
     cacheMeta: {
         state: CACHE_STATE.idle,
         lastUpdated: 0,
-        lastError: null
-    },
-    displayedIds: []
+        lastError: null,
+        blockCount: 0
+    }
 };
 
 const elements = {
@@ -23,8 +24,6 @@ const elements = {
     blocksContainer: document.getElementById("blocks-container"),
     cacheLed: document.getElementById("cache-led"),
     cacheLabel: document.getElementById("cache-label"),
-    refreshButton: document.getElementById("refresh-blocks"),
-    themeButton: document.getElementById("theme-toggle"),
     blockTemplate: document.getElementById("block-card-template"),
     emptyTemplate: document.querySelector("[data-empty-state]"),
     bookmarkEmptyTemplate: document.getElementById("bookmark-empty-template")
@@ -47,15 +46,10 @@ async function hydrateState() {
     state.cacheMeta = { ...state.cacheMeta, ...meta };
     state.settings = await getSettings();
     applyTheme(state.settings.theme);
-    updateThemeButton();
     toggleRegions();
 }
 
 function wireEvents() {
-    elements.refreshButton?.addEventListener("click", handleRefreshClick);
-    elements.themeButton?.addEventListener("click", handleThemeToggle);
-    elements.blocksContainer?.addEventListener("click", handleBlockActions);
-
     if (storage?.onChanged) {
         storage.onChanged.addListener(handleStorageChange);
     }
@@ -81,20 +75,13 @@ function toggleRegions() {
     }
 }
 
-function updateThemeButton() {
-    if (!elements.themeButton || !state.settings) {
-        return;
-    }
-    const label = state.settings.theme.charAt(0).toUpperCase() + state.settings.theme.slice(1);
-    elements.themeButton.textContent = `Theme (${label})`;
-}
-
 async function renderBookmarks() {
     const strip = elements.bookmarkStrip;
     if (!strip) {
         return;
     }
     strip.textContent = "";
+    strip.classList.remove("scrolling");
     if (!state.settings?.showHeader) {
         return;
     }
@@ -116,6 +103,7 @@ async function renderBookmarks() {
             } else {
                 strip.textContent = "No bookmarks";
             }
+            strip.classList.remove("scrolling");
             return;
         }
         for (const item of collected) {
@@ -159,8 +147,10 @@ function createBookmarkNode(node) {
     const favicon = document.createElement("img");
     favicon.className = "bookmark-favicon";
     favicon.alt = "";
-    favicon.src = `chrome://favicon/size/16@2x/${encodeURIComponent(node.url)}`;
+    favicon.src = `https://www.google.com/s2/favicons?sz=32&domain_url=${encodeURIComponent(node.url)}`;
     favicon.referrerPolicy = "no-referrer";
+    favicon.decoding = "async";
+    favicon.loading = "lazy";
     favicon.onerror = () => favicon.remove();
 
     const label = document.createElement("span");
@@ -177,9 +167,12 @@ function renderBlocks() {
     elements.blocksContainer.innerHTML = "";
 
     if (!state.cache?.blockIds?.length) {
+        state.cacheMeta.blockCount = 0;
         showEmptyState();
         return;
     }
+
+    state.cacheMeta.blockCount = state.cache.blockIds.length;
 
     const blockCount = Math.max(1, Number(state.settings?.blockCount) || 1);
     const blocks = chooseRandomBlocks(state.cache, blockCount);
@@ -187,13 +180,16 @@ function renderBlocks() {
         showEmptyState();
         return;
     }
-    state.displayedIds = blocks.map((block) => block.id);
+
+    elements.blocksContainer.classList.remove("is-empty");
     for (const block of blocks) {
-        elements.blocksContainer.appendChild(renderBlockCard(block));
+        const node = renderBlockCard(block);
+        elements.blocksContainer.appendChild(node);
     }
 }
 
 function showEmptyState() {
+    elements.blocksContainer.classList.add("is-empty");
     if (elements.emptyTemplate) {
         elements.blocksContainer.appendChild(elements.emptyTemplate.cloneNode(true));
     } else {
@@ -202,165 +198,175 @@ function showEmptyState() {
         fallback.textContent = "No cached blocks yet. Configure sources in settings.";
         elements.blocksContainer.appendChild(fallback);
     }
-    state.displayedIds = [];
 }
 
 function renderBlockCard(block) {
-    if (!elements.blockTemplate) {
-        const fallback = document.createElement("article");
-        fallback.className = "block-card";
-        fallback.dataset.blockId = block.id;
-
-        const header = document.createElement("header");
-        const heading = document.createElement("h2");
-        heading.className = "block-title";
-        heading.textContent = block.title;
-        const meta = document.createElement("p");
-        meta.className = "block-meta";
-        meta.textContent = formatMeta(block);
-        header.append(heading, meta);
-
-        const body = document.createElement("div");
-        body.className = "block-body";
-        buildBlockBody(body, block);
-
-        const footer = document.createElement("div");
-        footer.className = "block-footer";
-        const arenaLink = document.createElement("a");
-        arenaLink.href = `https://www.are.na/block/${block.id}`;
-        arenaLink.target = "_blank";
-        arenaLink.rel = "noopener";
-        arenaLink.textContent = "Open in Are.na";
-        const dismiss = document.createElement("button");
-        dismiss.className = "button block-dismiss";
-        dismiss.type = "button";
-        dismiss.dataset.blockId = block.id;
-        dismiss.textContent = "Show another";
-        footer.append(arenaLink, dismiss);
-
-        fallback.append(header, body, footer);
-        return fallback;
-    }
-
-    const fragment = elements.blockTemplate.content.cloneNode(true);
-    const article = fragment.querySelector("article");
-    if (!article) {
+    if (elements.blockTemplate?.content) {
+        const fragment = elements.blockTemplate.content.cloneNode(true);
+        const article = fragment.querySelector("article");
+        populateCard(article, block);
         return fragment;
     }
-    article.dataset.blockId = block.id;
-
-    const title = article.querySelector(".block-title");
-    if (title) {
-        title.textContent = block.title;
-    }
-
-    const meta = article.querySelector(".block-meta");
-    if (meta) {
-        meta.textContent = formatMeta(block);
-    }
-
-    const body = article.querySelector(".block-body");
-    if (body) {
-        body.innerHTML = "";
-        buildBlockBody(body, block);
-    }
-
-    const link = article.querySelector(".block-link");
-    if (link) {
-        link.href = `https://www.are.na/block/${block.id}`;
-    }
-
-    const dismiss = article.querySelector(".block-dismiss");
-    if (dismiss) {
-        dismiss.dataset.blockId = block.id;
-    }
-
-    return fragment;
+    return buildFallbackCard(block);
 }
 
-function buildBlockBody(container, block) {
-    switch (block.type) {
-        case "Image":
-            if (block.imageUrl) {
-                const img = document.createElement("img");
-                img.src = block.imageUrl;
-                img.alt = block.descriptionText || block.title;
-                img.loading = "lazy";
-                container.appendChild(img);
-            }
-            break;
-        case "Text":
-            if (block.contentHtml) {
-                const text = document.createElement("div");
-                text.innerHTML = block.contentHtml;
-                container.appendChild(text);
-            }
-            break;
-        case "Link":
-            if (block.linkUrl) {
-                container.appendChild(buildLinkRow(block.linkUrl));
-            }
-            break;
-        case "Attachment":
-            if (block.attachment?.url) {
-                const link = buildLinkRow(block.attachment.url, block.attachment.fileName || "Attachment");
-                container.appendChild(link);
-            }
-            break;
-        case "Embed":
-            if (block.embed?.html) {
-                const wrapper = document.createElement("div");
-                wrapper.innerHTML = block.embed.html;
-                container.appendChild(wrapper);
-            } else if (block.embed?.url) {
-                container.appendChild(buildLinkRow(block.embed.url, "Open embed"));
-            }
-            break;
-        case "Channel":
-            if (block.channel?.title) {
-                container.appendChild(document.createTextNode(`Channel: ${block.channel.title}`));
-            } else {
-                container.appendChild(document.createTextNode("Channel block"));
-            }
-            break;
-        default:
-            container.appendChild(document.createTextNode(block.descriptionText || "Untitled block"));
-            break;
+function populateCard(article, block) {
+    if (!article) {
+        return;
+    }
+    const main = article.querySelector("[data-main]");
+    const titleEl = article.querySelector(".block-title");
+    const descriptionEl = article.querySelector(".block-description");
+    const dateEl = article.querySelector(".block-date");
+    const typeEl = article.querySelector(".block-type");
+    const linkEl = article.querySelector(".block-link");
+
+    if (main) {
+        buildMainContent(main, block);
     }
 
-    if (block.descriptionHtml) {
-        const desc = document.createElement("div");
-        desc.className = "block-description";
-        desc.innerHTML = block.descriptionHtml;
-        container.appendChild(desc);
+    const title = block.title || `Block ${block.id}`;
+    if (titleEl) {
+        titleEl.textContent = title;
     }
 
-    if (block.linkUrl && block.type !== "Link") {
-        container.appendChild(buildLinkRow(block.linkUrl, "Source link"));
-    }
-}
-
-function buildLinkRow(url, label) {
-    const link = document.createElement("a");
-    link.href = url;
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = label || url;
-    return link;
-}
-
-function formatMeta(block) {
-    const parts = [block.type];
-    if (block.channel?.title) {
-        parts.push(block.channel.title);
-    }
-    if (block.createdAt) {
-        const exact = formatExactDate(block.createdAt);
-        if (exact) {
-            parts.push(exact);
+    if (descriptionEl) {
+        if (block.descriptionText) {
+            descriptionEl.textContent = block.descriptionText;
+            descriptionEl.classList.remove("is-empty");
+        } else {
+            descriptionEl.textContent = "";
+            descriptionEl.classList.add("is-empty");
         }
     }
-    return parts.join(" · ");
+
+    if (dateEl) {
+        const exact = formatExactDate(block.createdAt);
+        dateEl.textContent = exact || "";
+    }
+
+    if (typeEl) {
+        typeEl.textContent = block.type || "Block";
+    }
+
+    if (linkEl) {
+        linkEl.href = `https://www.are.na/block/${block.id}`;
+    }
+}
+
+function buildFallbackCard(block) {
+    const article = document.createElement("article");
+    article.className = "block-card";
+
+    const main = document.createElement("div");
+    main.className = "block-main";
+    buildMainContent(main, block);
+
+    const info = document.createElement("div");
+    info.className = "block-info";
+
+    const titleEl = document.createElement("h2");
+    titleEl.className = "block-title";
+    titleEl.textContent = block.title || `Block ${block.id}`;
+
+    const descriptionEl = document.createElement("p");
+    descriptionEl.className = "block-description";
+    if (block.descriptionText) {
+        descriptionEl.textContent = block.descriptionText;
+    } else {
+        descriptionEl.classList.add("is-empty");
+    }
+
+    const metaRow = document.createElement("div");
+    metaRow.className = "block-meta-row";
+
+    const dateEl = document.createElement("span");
+    dateEl.className = "block-date";
+    dateEl.textContent = formatExactDate(block.createdAt) || "";
+
+    const linkEl = document.createElement("a");
+    linkEl.className = "block-link";
+    linkEl.href = `https://www.are.na/block/${block.id}`;
+    linkEl.target = "_blank";
+    linkEl.rel = "noopener";
+    linkEl.textContent = "View on Are.na";
+
+    const typeEl = document.createElement("span");
+    typeEl.className = "block-type";
+    typeEl.textContent = block.type || "Block";
+
+    metaRow.append(dateEl, linkEl, typeEl);
+    info.append(titleEl, descriptionEl, metaRow);
+    article.append(main, info);
+    return article;
+}
+
+function buildMainContent(container, block) {
+    container.innerHTML = "";
+    const type = block.type;
+
+    if (type === "Image" && block.imageUrl) {
+        const img = document.createElement("img");
+        img.src = block.imageUrl;
+        img.alt = block.descriptionText || block.title || "Are.na image";
+        img.loading = "lazy";
+        container.appendChild(img);
+        return;
+    }
+
+    if (type === "Text") {
+        const wrapper = document.createElement("div");
+        wrapper.className = "text-tile";
+        const content = document.createElement("span");
+        content.className = "tile-text-content";
+        const raw = block.contentHtml || block.descriptionHtml;
+        const textContent = raw ? toPlainText(raw) : block.descriptionText || block.title || "Text";
+        content.textContent = textContent.trim();
+        wrapper.appendChild(content);
+        container.appendChild(wrapper);
+        return;
+    }
+
+    if (type === "Link" && block.linkUrl) {
+        container.appendChild(createChip(formatLinkLabel(block.linkUrl)));
+        return;
+    }
+
+    if (type === "Attachment" && block.attachment?.url) {
+        const name = block.attachment.fileName || block.title || "Attachment";
+        container.appendChild(createChip(name));
+        return;
+    }
+
+    if (type === "Embed") {
+        const label = block.embed?.type || block.title || "Embed";
+        container.appendChild(createChip(label));
+        return;
+    }
+
+    if (type === "Channel" && block.channel?.title) {
+        container.appendChild(createChip(block.channel.title));
+        return;
+    }
+
+    const fallback = block.descriptionText || block.title || "Untitled";
+    container.appendChild(createChip(fallback));
+}
+
+function createChip(label) {
+    const chip = document.createElement("div");
+    chip.className = "tile-chip";
+    chip.textContent = label;
+    return chip;
+}
+
+function formatLinkLabel(url) {
+    try {
+        const parsed = new URL(url);
+        return parsed.hostname.replace(/^www\./i, "");
+    } catch (_) {
+        return url;
+    }
 }
 
 function updateCacheStatus() {
@@ -391,47 +397,6 @@ function updateCacheStatus() {
     }
 }
 
-
-async function handleRefreshClick() {
-    renderBlocks();
-}
-
-async function handleThemeToggle() {
-    const next = nextTheme(state.settings.theme);
-    const updated = await saveSettings({ ...state.settings, theme: next });
-    state.settings = updated;
-    applyTheme(next);
-    updateThemeButton();
-}
-
-function handleBlockActions(event) {
-    const target = event.target;
-    if (target.matches(".block-dismiss")) {
-        const blockId = target.dataset.blockId;
-        replaceBlock(blockId, target.closest("article"));
-    }
-}
-
-function replaceBlock(blockId, article) {
-    if (!article || !state.cache?.blockIds?.length) {
-        return;
-    }
-    const exclude = state.displayedIds.filter((id) => id !== blockId);
-    let [replacement] = chooseRandomBlocks(state.cache, 1, exclude);
-    if (!replacement) {
-        [replacement] = chooseRandomBlocks(state.cache, 1);
-    }
-    if (!replacement) {
-        return;
-    }
-    const newNode = renderBlockCard(replacement);
-    article.replaceWith(newNode);
-    const index = state.displayedIds.indexOf(blockId);
-    if (index >= 0) {
-        state.displayedIds.splice(index, 1, replacement.id);
-    }
-}
-
 function handleStorageChange(changes, area) {
     if (area !== "local") {
         return;
@@ -440,7 +405,6 @@ function handleStorageChange(changes, area) {
         getSettings().then((settings) => {
             state.settings = settings;
             applyTheme(state.settings.theme);
-            updateThemeButton();
             toggleRegions();
             renderBlocks();
             renderBookmarks();
@@ -468,6 +432,7 @@ function renderError(error) {
     if (!elements.blocksContainer) {
         return;
     }
+    elements.blocksContainer.classList.add("is-empty");
     const div = document.createElement("div");
     div.className = "block-empty";
     div.textContent = `Error: ${error.message}`;

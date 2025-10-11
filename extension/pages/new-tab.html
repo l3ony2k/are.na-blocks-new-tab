@@ -7,15 +7,10 @@
     <link rel="stylesheet" href="../styles/style.css">
     <script type="module" src="../scripts/new-tab.js" defer></script>
 </head>
-<body>
+<body data-page="new-tab">
     <div id="app-shell">
         <header id="header-bar" aria-label="Bookmarks bar">
             <div id="bookmark-strip" data-state="loading" aria-live="polite"></div>
-            <div id="header-actions">
-                <button id="refresh-blocks" class="button" type="button" title="Refresh blocks">Refresh</button>
-                <button id="theme-toggle" class="button" type="button" title="Toggle theme">Theme</button>
-                <a id="open-settings" class="button" href="../pages/settings.html" title="Open settings" target="_blank" rel="noopener">Settings</a>
-            </div>
         </header>
 
         <main id="content-area">
@@ -27,28 +22,25 @@
         </main>
 
         <footer id="footer-bar" aria-label="Extension footer">
-            <span>Are.na New Tab · v0.1.0</span>
             <div class="status-badge" id="cache-status">
                 <span class="status-led" id="cache-led"></span>
                 <span id="cache-label">Cache idle</span>
             </div>
-            <a href="https://www.are.na" target="_blank" rel="noopener">Are.na</a>
+            <a id="open-settings" class="button" href="../pages/settings.html" title="Open settings" target="_blank" rel="noopener">Settings</a>
         </footer>
     </div>
 
     <template id="block-card-template">
         <article class="block-card">
-            <header>
+            <div class="block-main" data-main></div>
+            <div class="block-info">
                 <h2 class="block-title"></h2>
-                <p class="block-meta"></p>
-            </header>
-            <div class="block-body"></div>
-            <div class="block-footer">
-                <a class="block-link" target="_blank" rel="noopener">
-                    <img src="../assets/arena-logo.svg" alt="Are.na" width="20" height="20">
-                    <span>Open in Are.na</span>
-                </a>
-                <button class="button block-dismiss" type="button">Show another</button>
+                <p class="block-description"></p>
+                <div class="block-meta-row">
+                    <span class="block-date"></span>
+                    <a class="block-link" target="_blank" rel="noopener">View on Are.na</a>
+                    <span class="block-type"></span>
+                </div>
             </div>
         </article>
     </template>

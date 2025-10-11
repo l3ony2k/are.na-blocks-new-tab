@@ -10,7 +10,7 @@ export const DEFAULT_SETTINGS = {
     blockCount: 3,
     showHeader: true,
     showFooter: true,
-    filters: ["Image", "Text", "Link", "Attachment", "Embed", "Channel"],
+    filters: ["Image"],
     theme: "system"
 };
 
