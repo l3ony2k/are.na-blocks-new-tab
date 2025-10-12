@@ -218,9 +218,9 @@ body ::-moz-selection {
 .bookmark-menu,
 .bookmark-submenu {
     position: absolute;
-    min-width: 200px;
+    min-width: 100px;
     margin: 0;
-    padding: 6px 0;
+    padding: 0;
     list-style: none;
     background-color: var(--block-bg);
     border: 1px solid var(--block-border);
@@ -275,6 +275,14 @@ body ::-moz-selection {
 
 .bookmark-menu-button {
     text-align: left;
+}
+
+.bookmark-overflow-hidden {
+    display: none !important;
+}
+
+.bookmark-overflow-trigger::after {
+    content: none;
 }
 
 .bookmark-menu-link .bookmark-favicon {
@@ -668,14 +676,25 @@ textarea {
 }
 
 .status-led {
-    width: 10px;
-    height: 10px;
+    display: inline-block;
+    width: 6px;
+    height: 6px;
     border: 1px solid var(--block-border);
     background-color: var(--meta-color);
 }
 
-.status-led.is-online {
+.status-led.is-idle {
+    background-color: var(--meta-color);
+}
+
+.status-led.is-working {
     background-color: var(--link-color);
+    border-color: var(--link-color);
+}
+
+.status-led.is-error {
+    background-color: #e25555;
+    border-color: #e25555;
 }
 
 /* --- Scrollbar Styling ----------------------------------------------------- */

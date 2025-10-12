@@ -20,6 +20,7 @@ const INFO_HEIGHT = 150;
 const RESIZE_DEBOUNCE = 150;
 const BOOKMARK_MENU_OFFSET = 4;
 const BOOKMARK_SUBMENU_OFFSET = 6;
+const BOOKMARK_OVERFLOW_TOLERANCE = 2;
 
 const state = {
     settings: null,
@@ -206,6 +207,8 @@ async function renderBookmarks() {
     }
     strip.textContent = "";
     strip.classList.remove("scrolling");
+    strip.classList.remove("has-overflow");
+    strip.dataset.hasOverflow = "false";
     if (!state.settings?.showHeader) {
         return;
     }
@@ -241,9 +244,7 @@ async function renderBookmarks() {
         }
         strip.appendChild(fragment);
         requestAnimationFrame(() => {
-            if (strip.scrollWidth > strip.clientWidth) {
-                strip.classList.add("scrolling");
-            }
+            applyBookmarkOverflow();
         });
     } catch (error) {
         console.error("Failed to load bookmarks", error);
@@ -258,9 +259,10 @@ function createBookmarkLink(node, className = "bookmark-link") {
     const link = document.createElement("a");
     link.className = className;
     link.href = node.url;
-    link.target = "_blank";
     link.rel = "noopener";
     link.title = node.title || node.url;
+    link.dataset.bookmarkItem = "true";
+    link.__bookmarkNode = node;
 
     const favicon = document.createElement("img");
     favicon.className = "bookmark-favicon";
@@ -281,6 +283,8 @@ function createBookmarkLink(node, className = "bookmark-link") {
 function createBookmarkFolder(node) {
     const container = document.createElement("div");
     container.className = "bookmark-folder";
+    container.dataset.bookmarkItem = "true";
+    container.__bookmarkNode = node;
 
     const trigger = document.createElement("button");
     trigger.type = "button";
@@ -337,8 +341,16 @@ function createBookmarkFolder(node) {
             if (!openBookmarkFolders.size) {
                 setMenuLayerActive(false);
             }
+        },
+        destroy() {
+            controller.close();
+            if (menu?.parentElement) {
+                menu.parentElement.removeChild(menu);
+            }
         }
     };
+
+    container.__bookmarkController = controller;
 
     function focusFirstItem() {
         const firstItem = menu.querySelector("a, button");
@@ -561,6 +573,19 @@ function createBookmarkMenuFolder(node, level) {
     return item;
 }
 
+function cleanupBookmarkElement(element) {
+    if (!element) {
+        return;
+    }
+    const controller = element.__bookmarkController;
+    if (controller) {
+        controller.destroy();
+    }
+    if (element.parentElement) {
+        element.parentElement.removeChild(element);
+    }
+}
+
 function closeBookmarkMenusFromLevel(level, except) {
     if (!openBookmarkFolders.size) {
         return;
@@ -618,6 +643,140 @@ function handleBookmarkWheel(event) {
     }
     event.preventDefault();
     strip.scrollLeft += delta;
+}
+
+function createOverflowButton(nodes) {
+    if (!Array.isArray(nodes) || !nodes.length) {
+        return null;
+    }
+    const overflowNode = {
+        id: "bookmark-overflow",
+        title: "⋯",
+        children: nodes
+    };
+    const container = createBookmarkFolder(overflowNode);
+    if (!container) {
+        return null;
+    }
+    container.dataset.bookmarkOverflow = "true";
+    container.dataset.bookmarkItem = "overflow";
+    container.classList.add("bookmark-overflow");
+    container.__bookmarkNode = overflowNode;
+    const trigger = container.querySelector(".bookmark-trigger");
+    if (trigger) {
+        trigger.textContent = "⋯";
+        trigger.setAttribute("aria-label", "More bookmarks");
+        trigger.title = "More bookmarks";
+        trigger.classList.add("bookmark-overflow-trigger");
+    }
+    return container;
+}
+
+function applyBookmarkOverflow() {
+    const strip = elements.bookmarkStrip;
+    if (!strip || !strip.childElementCount) {
+        return;
+    }
+
+    const previousOverflow = Array.from(
+        strip.querySelectorAll('[data-bookmark-overflow="true"]')
+    );
+    for (const element of previousOverflow) {
+        cleanupBookmarkElement(element);
+    }
+
+    const items = Array.from(strip.children).filter(
+        (child) => child?.dataset?.bookmarkItem === "true"
+    );
+
+    if (!items.length) {
+        strip.dataset.hasOverflow = "false";
+        return;
+    }
+
+    const availableWidth = strip.clientWidth || 0;
+    if (!availableWidth) {
+        strip.dataset.hasOverflow = "false";
+        return;
+    }
+
+    const threshold = availableWidth - BOOKMARK_OVERFLOW_TOLERANCE;
+    const hiddenNodes = [];
+
+    const showItem = (item) => {
+        item.classList.remove("bookmark-overflow-hidden");
+        item.removeAttribute("aria-hidden");
+    };
+
+    const hideItem = (item, addToFront = false) => {
+        if (!item || item.classList.contains("bookmark-overflow-hidden")) {
+            return;
+        }
+        if (item.__bookmarkController) {
+            item.__bookmarkController.close();
+        }
+        item.classList.add("bookmark-overflow-hidden");
+        item.setAttribute("aria-hidden", "true");
+        const data = item.__bookmarkNode;
+        if (data) {
+            if (addToFront) {
+                hiddenNodes.unshift(data);
+            } else {
+                hiddenNodes.push(data);
+            }
+        }
+    };
+
+    for (const item of items) {
+        showItem(item);
+    }
+
+    let cutoff = items.length;
+    for (let i = 0; i < items.length; i += 1) {
+        const item = items[i];
+        const rectRight = item.offsetLeft + item.offsetWidth;
+        if (rectRight > threshold) {
+            cutoff = i;
+            break;
+        }
+    }
+
+    if (cutoff < items.length) {
+        for (let i = cutoff; i < items.length; i += 1) {
+            hideItem(items[i]);
+        }
+    }
+
+    let overflowContainer = null;
+
+    if (hiddenNodes.length) {
+        overflowContainer = createOverflowButton(hiddenNodes);
+        if (overflowContainer) {
+            strip.appendChild(overflowContainer);
+            let index = cutoff - 1;
+            while (
+                overflowContainer.offsetLeft + overflowContainer.offsetWidth >
+                    threshold &&
+                index >= 0
+            ) {
+                const item = items[index];
+                hideItem(item, true);
+                index -= 1;
+                cleanupBookmarkElement(overflowContainer);
+                overflowContainer = createOverflowButton(hiddenNodes);
+                if (!overflowContainer) {
+                    break;
+                }
+                strip.appendChild(overflowContainer);
+            }
+        }
+    }
+
+    strip.dataset.hasOverflow = hiddenNodes.length ? "true" : "false";
+    strip.classList.toggle("has-overflow", hiddenNodes.length > 0);
+    if (openBookmarkFolders.size) {
+        repositionOpenMenus();
+    }
 }
 
 function renderBlocks() {
@@ -1067,28 +1226,46 @@ function formatLinkLabel(url) {
 }
 
 function updateCacheStatus() {
-    if (!elements.cacheLabel) {
+    const led = elements.cacheLed;
+    const label = elements.cacheLabel;
+    if (!led && !label) {
         return;
     }
     const status = state.cacheMeta?.state || CACHE_STATE.idle;
-    elements.cacheLed?.classList.toggle("is-online", status === CACHE_STATE.working);
+    if (led) {
+        led.classList.remove("is-idle", "is-working", "is-error");
+        const nextClass =
+            status === CACHE_STATE.working
+                ? "is-working"
+                : status === CACHE_STATE.error
+                ? "is-error"
+                : "is-idle";
+        if (nextClass) {
+            led.classList.add(nextClass);
+        }
+        led.dataset.state = status;
+    }
+
+    if (!label) {
+        return;
+    }
 
     switch (status) {
         case CACHE_STATE.working:
-            elements.cacheLabel.textContent = "Refreshing cache";
+            label.textContent = "Refreshing cache";
             break;
         case CACHE_STATE.error:
-            elements.cacheLabel.textContent = state.cacheMeta.lastError || "Cache error";
+            label.textContent = state.cacheMeta.lastError || "Cache error";
             break;
         default: {
             const timestamp = state.cacheMeta.lastUpdated || state.cache?.fetchedAt;
             const blockCount = state.cacheMeta.blockCount ?? state.cache?.blockIds?.length ?? 0;
             if (timestamp && blockCount) {
-                elements.cacheLabel.textContent = `${blockCount} block${blockCount === 1 ? "" : "s"} - ${formatRelativeTime(timestamp)}`;
+                label.textContent = `${blockCount} block${blockCount === 1 ? "" : "s"} - ${formatRelativeTime(timestamp)}`;
             } else if (timestamp) {
-                elements.cacheLabel.textContent = `Cached ${formatRelativeTime(timestamp)}`;
+                label.textContent = `Cached ${formatRelativeTime(timestamp)}`;
             } else {
-                elements.cacheLabel.textContent = "Cache idle";
+                label.textContent = "Cache idle";
             }
         }
     }
@@ -1136,6 +1313,7 @@ function handleResize() {
             renderLayout(state.currentBlocks);
         }
         repositionOpenMenus();
+        applyBookmarkOverflow();
     }, RESIZE_DEBOUNCE);
 }
 
