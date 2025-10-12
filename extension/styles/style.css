@@ -122,7 +122,8 @@ body ::-moz-selection {
     flex: 1;
     display: flex;
     align-items: center;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: hidden;
     gap: 8px;
 }
 
@@ -156,12 +157,24 @@ body ::-moz-selection {
 
 #bookmark-strip.scrolling {
     overflow-x: auto;
+    overflow-y: hidden;
     padding-bottom: 4px;
     scrollbar-width: none;
 }
 
 #bookmark-strip.scrolling::-webkit-scrollbar {
     display: none;
+}
+
+#bookmark-menu-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+}
+
+#bookmark-menu-layer[aria-hidden="false"] {
+    pointer-events: auto;
 }
 
 .bookmark-folder {
@@ -205,36 +218,27 @@ body ::-moz-selection {
 .bookmark-menu,
 .bookmark-submenu {
     position: absolute;
-    top: 100%;
-    left: 0;
     min-width: 200px;
-    margin: 6px 0 0;
+    margin: 0;
     padding: 6px 0;
     list-style: none;
     background-color: var(--block-bg);
     border: 1px solid var(--block-border);
     box-shadow: 6px 6px 0 var(--shadow-color);
     z-index: 20;
-}
-
-.bookmark-menu {
-    display: none;
-}
-
-.bookmark-folder.is-open > .bookmark-menu {
     display: block;
+    pointer-events: auto;
+    overflow-y: auto;
 }
 
-.bookmark-submenu {
-    display: none;
-    top: 0;
-    left: 100%;
-    margin-left: 6px;
+.bookmark-menu[hidden],
+.bookmark-submenu[hidden] {
+    display: none !important;
 }
 
 .bookmark-menu-item {
     position: relative;
-    display: flex;
+    display: block;
 }
 
 .bookmark-menu-divider {
@@ -247,9 +251,9 @@ body ::-moz-selection {
 .bookmark-menu-button {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 6px 14px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 6px 12px;
     width: 100%;
     background: none;
     border: none;
@@ -273,6 +277,21 @@ body ::-moz-selection {
     text-align: left;
 }
 
+.bookmark-menu-link .bookmark-favicon {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    object-fit: contain;
+}
+
+.bookmark-menu-link span,
+.bookmark-menu-button span:first-child {
+    flex: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .bookmark-menu-button:disabled {
     cursor: default;
     opacity: 0.5;
@@ -281,11 +300,6 @@ body ::-moz-selection {
 .bookmark-menu-arrow {
     font-size: 10px;
     margin-left: auto;
-}
-
-.bookmark-menu-item.has-children.submenu-open > .bookmark-submenu,
-.bookmark-menu-item.has-children:hover > .bookmark-submenu {
-    display: block;
 }
 
 .button {

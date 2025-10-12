@@ -18,6 +18,8 @@ const AUTO_TILE_SIZES = [420, 360, 320, 300, 260, 225];
 const TILE_GAP = 18;
 const INFO_HEIGHT = 150;
 const RESIZE_DEBOUNCE = 150;
+const BOOKMARK_MENU_OFFSET = 4;
+const BOOKMARK_SUBMENU_OFFSET = 6;
 
 const state = {
     settings: null,
@@ -41,12 +43,103 @@ const elements = {
     cacheLabel: document.getElementById("cache-label"),
     blockTemplate: document.getElementById("block-card-template"),
     emptyTemplate: document.querySelector("[data-empty-state]"),
-    bookmarkEmptyTemplate: document.getElementById("bookmark-empty-template")
+    bookmarkEmptyTemplate: document.getElementById("bookmark-empty-template"),
+    bookmarkMenuLayer: document.getElementById("bookmark-menu-layer")
 };
 
 let resizeTimer = null;
 const openBookmarkFolders = new Set();
 
+function setMenuLayerActive(isActive) {
+    const layer = elements.bookmarkMenuLayer;
+    if (!layer) {
+        return;
+    }
+    layer.setAttribute("aria-hidden", isActive ? "false" : "true");
+    layer.style.pointerEvents = isActive ? "auto" : "none";
+}
+
+function positionRootMenu(menu, trigger) {
+    if (!menu || !trigger) {
+        return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    menu.style.maxHeight = "";
+    menu.style.overflowY = "visible";
+    menu.style.width = "auto";
+
+    const menuWidth = menu.offsetWidth || 0;
+    const menuHeight = menu.offsetHeight || 0;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const maxWidth = Math.max(8, viewportWidth - 16);
+    const maxHeight = Math.max(8, viewportHeight - 16);
+
+    const desiredLeft = rect.left;
+    const desiredTop = rect.bottom + BOOKMARK_MENU_OFFSET;
+
+    const clampedLeft = Math.min(Math.max(8, desiredLeft), Math.max(8, viewportWidth - menuWidth - 8));
+    const clampedTop = Math.min(Math.max(8, desiredTop), Math.max(8, viewportHeight - menuHeight - 8));
+
+    menu.style.left = `${Math.round(clampedLeft)}px`;
+    menu.style.top = `${Math.round(clampedTop)}px`;
+
+    menu.style.maxHeight = `${maxHeight}px`;
+    menu.style.overflowY = "auto";
+    const targetWidth = Math.min(menuWidth || 200, maxWidth);
+    menu.style.width = `${targetWidth}px`;
+}
+
+function positionSubMenu(menu, trigger) {
+    if (!menu || !trigger) {
+        return;
+    }
+    menu.style.maxHeight = "";
+    menu.style.overflowY = "visible";
+    menu.style.width = "auto";
+
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = menu.offsetWidth || 0;
+    const menuHeight = menu.offsetHeight || 0;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const maxWidth = Math.max(8, viewportWidth - 16);
+    const maxHeight = Math.max(8, viewportHeight - 16);
+
+    let desiredLeft = rect.right + BOOKMARK_SUBMENU_OFFSET;
+    if (desiredLeft + menuWidth + 8 > viewportWidth) {
+        desiredLeft = rect.left - menuWidth - BOOKMARK_SUBMENU_OFFSET;
+    }
+
+    const clampedLeft = Math.min(Math.max(8, desiredLeft), Math.max(8, viewportWidth - menuWidth - 8));
+
+    let desiredTop = rect.top;
+    if (desiredTop + menuHeight + 8 > viewportHeight) {
+        desiredTop = viewportHeight - menuHeight - 8;
+    }
+    const clampedTop = Math.min(Math.max(8, desiredTop), Math.max(8, viewportHeight - menuHeight - 8));
+
+    menu.style.left = `${Math.round(clampedLeft)}px`;
+    menu.style.top = `${Math.round(clampedTop)}px`;
+
+    const targetWidth = Math.min(menuWidth || 200, maxWidth);
+    menu.style.width = `${targetWidth}px`;
+    menu.style.maxHeight = `${maxHeight}px`;
+    menu.style.overflowY = "auto";
+}
+
+function repositionOpenMenus() {
+    if (!elements.bookmarkMenuLayer || !openBookmarkFolders.size) {
+        return;
+    }
+    for (const controller of openBookmarkFolders) {
+        if (typeof controller?.position === "function") {
+            controller.position();
+        } else if (controller?.menu && controller?.trigger) {
+            positionRootMenu(controller.menu, controller.trigger);
+        }
+    }
+}
 async function init() {
     try {
         await hydrateState();
@@ -75,6 +168,7 @@ function wireEvents() {
         runtime.onMessage.addListener(handleRuntimeMessage);
     }
     window.addEventListener("resize", handleResize, { passive: true });
+    window.addEventListener("scroll", handleScroll, { passive: true });
     if (elements.bookmarkStrip) {
         elements.bookmarkStrip.addEventListener("wheel", handleBookmarkWheel, { passive: false });
     }
@@ -105,6 +199,11 @@ async function renderBookmarks() {
         return;
     }
     closeAllBookmarkFolders();
+    openBookmarkFolders.clear();
+    if (elements.bookmarkMenuLayer) {
+        elements.bookmarkMenuLayer.innerHTML = "";
+        setMenuLayerActive(false);
+    }
     strip.textContent = "";
     strip.classList.remove("scrolling");
     if (!state.settings?.showHeader) {
@@ -191,42 +290,93 @@ function createBookmarkFolder(node) {
     trigger.setAttribute("aria-expanded", "false");
     trigger.textContent = node.title || "Folder";
 
+    container.appendChild(trigger);
+
     const menu = buildBookmarkMenu(node.children || [], 0);
     if (!menu.childElementCount) {
         trigger.disabled = true;
         trigger.setAttribute("aria-disabled", "true");
-        container.appendChild(trigger);
         return container;
     }
 
+    const menuId = `bookmark-menu-${node.id || Math.random().toString(36).slice(2)}`;
+    menu.id = menuId;
+    trigger.setAttribute("aria-controls", menuId);
+
     menu.hidden = true;
-    container.appendChild(trigger);
-    container.appendChild(menu);
+    menu.setAttribute("hidden", "");
+    menu.setAttribute("aria-hidden", "true");
+
+    const menuLayer = elements.bookmarkMenuLayer;
+    if (menuLayer) {
+        menuLayer.appendChild(menu);
+    } else {
+        container.appendChild(menu);
+    }
 
     const controller = {
+        trigger,
+        menu,
+        level: 0,
+        isOpen: false,
+        position() {
+            positionRootMenu(menu, trigger);
+        },
         close() {
+            if (!controller.isOpen) {
+                return;
+            }
+            closeBookmarkMenusFromLevel(controller.level + 1);
             trigger.setAttribute("aria-expanded", "false");
             container.classList.remove("is-open");
             menu.hidden = true;
             menu.setAttribute("hidden", "");
+            menu.setAttribute("aria-hidden", "true");
+            controller.isOpen = false;
             openBookmarkFolders.delete(controller);
+            if (!openBookmarkFolders.size) {
+                setMenuLayerActive(false);
+            }
         }
     };
 
-    controller.open = () => {
+    function focusFirstItem() {
+        const firstItem = menu.querySelector("a, button");
+        firstItem?.focus();
+    }
+
+    controller.open = (focusFirst = false) => {
+        if (controller.isOpen) {
+            controller.position();
+            if (focusFirst) {
+                focusFirstItem();
+            }
+            return;
+        }
         closeAllBookmarkFolders(controller);
         container.classList.add("is-open");
         trigger.setAttribute("aria-expanded", "true");
         menu.hidden = false;
         menu.removeAttribute("hidden");
+        menu.setAttribute("aria-hidden", "false");
         menu.scrollTop = 0;
+        controller.isOpen = true;
         openBookmarkFolders.add(controller);
+        if (menuLayer) {
+            setMenuLayerActive(true);
+            menuLayer.appendChild(menu);
+            menu.style.zIndex = "30";
+        }
+        controller.position();
+        if (focusFirst) {
+            focusFirstItem();
+        }
     };
 
     trigger.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (container.classList.contains("is-open")) {
+        if (controller.isOpen) {
             controller.close();
         } else {
             controller.open();
@@ -236,19 +386,11 @@ function createBookmarkFolder(node) {
     trigger.addEventListener("keydown", (event) => {
         if (event.key === "ArrowDown") {
             event.preventDefault();
-            if (!container.classList.contains("is-open")) {
-                controller.open();
-            }
-            const firstItem = menu.querySelector("a, button");
-            firstItem?.focus();
+            controller.open(true);
         } else if (event.key === "Escape") {
+            event.preventDefault();
             controller.close();
-        }
-    });
-
-    container.addEventListener("mouseleave", (event) => {
-        if (!container.contains(event.relatedTarget)) {
-            controller.close();
+            trigger.focus();
         }
     });
 
@@ -258,6 +400,7 @@ function createBookmarkFolder(node) {
 function buildBookmarkMenu(nodes, level = 0) {
     const menu = document.createElement("ul");
     menu.className = level === 0 ? "bookmark-menu" : "bookmark-submenu";
+    menu.dataset.level = String(level);
     menu.setAttribute("role", "menu");
 
     for (const child of nodes) {
@@ -313,57 +456,125 @@ function createBookmarkMenuFolder(node, level) {
         return null;
     }
     submenu.hidden = true;
+    submenu.setAttribute("hidden", "");
+    submenu.setAttribute("aria-hidden", "true");
 
-    function openSubmenu() {
+    const submenuId = `bookmark-menu-${node.id || Math.random().toString(36).slice(2)}`;
+    submenu.id = submenuId;
+    button.setAttribute("aria-controls", submenuId);
+
+    const menuLayer = elements.bookmarkMenuLayer;
+    if (menuLayer) {
+        menuLayer.appendChild(submenu);
+    } else {
+        item.appendChild(submenu);
+    }
+
+    function focusFirstItem() {
+        const firstItem = submenu.querySelector("a, button");
+        firstItem?.focus();
+    }
+
+    const controller = {
+        trigger: button,
+        menu: submenu,
+        level,
+        isOpen: false,
+        position() {
+            positionSubMenu(submenu, button);
+        },
+        close() {
+            if (!controller.isOpen) {
+                return;
+            }
+            item.classList.remove("submenu-open");
+            button.setAttribute("aria-expanded", "false");
+            submenu.hidden = true;
+            submenu.setAttribute("hidden", "");
+            submenu.setAttribute("aria-hidden", "true");
+            controller.isOpen = false;
+            closeBookmarkMenusFromLevel(controller.level + 1);
+            openBookmarkFolders.delete(controller);
+            if (!openBookmarkFolders.size) {
+                setMenuLayerActive(false);
+            }
+        }
+    };
+
+    controller.open = (focusFirst = false) => {
+        if (controller.isOpen) {
+            controller.position();
+            if (focusFirst) {
+                focusFirstItem();
+            }
+            return;
+        }
+        closeBookmarkMenusFromLevel(level, controller);
         item.classList.add("submenu-open");
+        button.setAttribute("aria-expanded", "true");
         submenu.hidden = false;
         submenu.removeAttribute("hidden");
-        button.setAttribute("aria-expanded", "true");
-    }
-
-    function closeSubmenu() {
-        item.classList.remove("submenu-open");
-        submenu.hidden = true;
-        submenu.setAttribute("hidden", "");
-        button.setAttribute("aria-expanded", "false");
-    }
+        submenu.setAttribute("aria-hidden", "false");
+        submenu.scrollTop = 0;
+        controller.isOpen = true;
+        openBookmarkFolders.add(controller);
+        if (menuLayer) {
+            menuLayer.appendChild(submenu);
+            submenu.style.zIndex = String(30 + level);
+        }
+        controller.position();
+        if (focusFirst) {
+            focusFirstItem();
+        }
+    };
 
     button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (item.classList.contains("submenu-open")) {
-            closeSubmenu();
+        if (controller.isOpen) {
+            controller.close();
         } else {
-            openSubmenu();
-            const firstItem = submenu.querySelector("a, button");
-            firstItem?.focus();
+            controller.open(true);
         }
     });
 
-    button.addEventListener("mouseenter", openSubmenu);
-    button.addEventListener("focus", openSubmenu);
-    item.addEventListener("mouseleave", (event) => {
-        if (!item.contains(event.relatedTarget)) {
-            closeSubmenu();
-        }
+    button.addEventListener("pointerenter", () => {
+        controller.open();
+    });
+
+    button.addEventListener("focus", () => {
+        controller.open();
     });
 
     button.addEventListener("keydown", (event) => {
         if (event.key === "ArrowRight") {
             event.preventDefault();
-            openSubmenu();
-            const firstItem = submenu.querySelector("a, button");
-            firstItem?.focus();
+            controller.open(true);
         } else if (event.key === "ArrowLeft" || event.key === "Escape") {
             event.preventDefault();
-            closeSubmenu();
+            controller.close();
             button.focus();
         }
     });
 
     item.appendChild(button);
-    item.appendChild(submenu);
     return item;
+}
+
+function closeBookmarkMenusFromLevel(level, except) {
+    if (!openBookmarkFolders.size) {
+        return;
+    }
+    const controllers = Array.from(openBookmarkFolders);
+    for (const controller of controllers) {
+        if (controller === except) {
+            continue;
+        }
+        const controllerLevel = controller?.level ?? 0;
+        if (controllerLevel >= level) {
+            controller.close();
+        }
+    }
 }
 
 function closeAllBookmarkFolders(except) {
@@ -382,7 +593,7 @@ function handleDocumentPointerDown(event) {
     if (!openBookmarkFolders.size) {
         return;
     }
-    if (!event.target.closest(".bookmark-folder")) {
+    if (!event.target.closest(".bookmark-folder, .bookmark-menu, .bookmark-submenu")) {
         closeAllBookmarkFolders();
     }
 }
@@ -919,13 +1130,17 @@ function handleRuntimeMessage(message) {
 }
 
 function handleResize() {
-    if (!state.currentBlocks.length) {
-        return;
-    }
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-        renderLayout(state.currentBlocks);
+        if (state.currentBlocks.length) {
+            renderLayout(state.currentBlocks);
+        }
+        repositionOpenMenus();
     }, RESIZE_DEBOUNCE);
+}
+
+function handleScroll() {
+    repositionOpenMenus();
 }
 
 function renderError(error) {
