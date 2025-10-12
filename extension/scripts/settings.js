@@ -1,4 +1,4 @@
-import { BLOCK_TYPES, CACHE_STATE, DEFAULT_SETTINGS, MESSAGES, STORAGE_KEYS } from "./constants.js";
+import { BLOCK_TYPES, CACHE_STATE, DEFAULT_SETTINGS, MESSAGES, STORAGE_KEYS, TILE_SIZE_OPTIONS } from "./constants.js";
 import { runtime, storage } from "./extension-api.js";
 import { getCache, getSettings, parseBlockIds, parseChannelSlugs, saveSettings } from "./storage.js";
 import { applyTheme } from "./theme.js";
@@ -20,14 +20,24 @@ const elements = {
     channelSlugs: document.getElementById("channel-slugs"),
     blockIds: document.getElementById("block-ids"),
     blockCount: document.getElementById("block-count"),
+    blockCountOutput: document.getElementById("block-count-output"),
     tileSize: document.getElementById("tile-size"),
+    tileSizeOutput: document.getElementById("tile-size-output"),
     showHeader: document.getElementById("show-header"),
     showFooter: document.getElementById("show-footer"),
     filters: document.querySelectorAll("input[name='filters']"),
     themeRadios: document.querySelectorAll("input[name='theme']"),
     cacheInfo: document.getElementById("cache-info"),
-    testButton: document.getElementById("test-sources"),
     refreshButton: document.getElementById("refresh-sources")
+};
+
+const TILE_SIZE_LABEL_MAP = {
+    auto: "Auto",
+    xs: "Extra small",
+    s: "Small",
+    m: "Medium",
+    l: "Large",
+    xl: "Extra large"
 };
 
 async function init() {
@@ -51,12 +61,27 @@ async function hydrateState() {
 }
 
 function populateForm() {
-    elements.channelSlugs.value = state.settings.channelSlugs.join(", ");
-    elements.blockIds.value = state.settings.blockIds.join(", ");
-    elements.blockCount.value = state.settings.blockCount;
-    elements.tileSize.value = state.settings.tileSize;
-    elements.showHeader.checked = state.settings.showHeader;
-    elements.showFooter.checked = state.settings.showFooter;
+    if (elements.channelSlugs) {
+        elements.channelSlugs.value = state.settings.channelSlugs.join(", ");
+    }
+    if (elements.blockIds) {
+        elements.blockIds.value = state.settings.blockIds.join(", ");
+    }
+    if (elements.blockCount) {
+        elements.blockCount.value = String(state.settings.blockCount);
+        updateBlockCountOutput();
+    }
+    if (elements.tileSize) {
+        const tileIndex = Math.max(0, TILE_SIZE_OPTIONS.indexOf(state.settings.tileSize));
+        elements.tileSize.value = String(tileIndex);
+        updateTileSizeOutput();
+    }
+    if (elements.showHeader) {
+        elements.showHeader.checked = state.settings.showHeader;
+    }
+    if (elements.showFooter) {
+        elements.showFooter.checked = state.settings.showFooter;
+    }
 
     const selectedFilters = new Set(state.settings.filters);
     elements.filters.forEach((checkbox) => {
@@ -71,6 +96,8 @@ function populateForm() {
 function wireEvents() {
     elements.form?.addEventListener("submit", handleSubmit);
     elements.form?.addEventListener("reset", handleReset);
+    elements.blockCount?.addEventListener("input", updateBlockCountOutput);
+    elements.tileSize?.addEventListener("input", updateTileSizeOutput);
     elements.themeRadios?.forEach((radio) => {
         radio.addEventListener("change", (event) => {
             if (event.target.checked) {
@@ -79,7 +106,6 @@ function wireEvents() {
             }
         });
     });
-    elements.testButton?.addEventListener("click", handleTestSources);
     elements.refreshButton?.addEventListener("click", handleRefreshClick);
 
     if (runtime?.onMessage) {
@@ -91,13 +117,14 @@ function wireEvents() {
 }
 
 function gatherFormSettings() {
-    const channelSlugs = parseChannelSlugs(elements.channelSlugs.value);
-    const blockIds = parseBlockIds(elements.blockIds.value);
-    let blockCount = Number(elements.blockCount.value) || DEFAULT_SETTINGS.blockCount;
+    const channelSlugs = parseChannelSlugs(elements.channelSlugs?.value || "");
+    const blockIds = parseBlockIds(elements.blockIds?.value || "");
+    let blockCount = Number(elements.blockCount?.value || DEFAULT_SETTINGS.blockCount);
     blockCount = Math.min(6, Math.max(1, blockCount));
-    const showHeader = elements.showHeader.checked;
-    const showFooter = elements.showFooter.checked;
-    const tileSize = elements.tileSize?.value || DEFAULT_SETTINGS.tileSize;
+    const showHeader = Boolean(elements.showHeader?.checked);
+    const showFooter = Boolean(elements.showFooter?.checked);
+    const tileIndex = Number(elements.tileSize?.value || 0);
+    const tileSize = TILE_SIZE_OPTIONS[tileIndex] || DEFAULT_SETTINGS.tileSize;
     let filters = Array.from(document.querySelectorAll("input[name='filters']:checked"), (input) => input.value);
     if (!filters.length) {
         filters = [...BLOCK_TYPES];
@@ -119,14 +146,8 @@ async function handleSubmit(event) {
         const saved = await saveSettings(nextSettings);
         state.settings = saved;
         updateTheme();
-        showStatus("Settings saved. Refreshing cache...");
-        const response = await requestCacheRefresh({ reason: "settings-save" });
-        if (response?.ok) {
-            const count = response.summary?.blockCount || 0;
-            showStatus(`Cache updated with ${count} block${count === 1 ? "" : "s"}.`);
-        } else if (response?.error) {
-            showStatus(`Cache refresh reported: ${response.error}`);
-        }
+        updateCacheInfo();
+        showStatus("Settings saved. Use Refresh cache to pull new blocks.");
     } catch (error) {
         console.error("Failed to save settings", error);
         showStatus(`Save failed: ${error.message}`);
@@ -143,34 +164,23 @@ function handleReset(event) {
     showStatus("Reset to stored settings");
 }
 
-async function handleTestSources() {
-    if (state.working) {
-        return;
-    }
-    const snapshot = gatherFormSettings();
-    updateWorking(true, "Testing sources...");
-    try {
-        const result = await requestCacheRefresh({ reason: "test", testOnly: true, settingsOverride: snapshot });
-        if (result?.ok) {
-            const count = result.summary?.blockCount || 0;
-            showStatus(`Test succeeded. ${count} block${count === 1 ? "" : "s"} found.`);
-        } else {
-            showStatus("Test completed.");
-        }
-    } catch (error) {
-        console.error("Test failed", error);
-        showStatus(`Test failed: ${error.message}`);
-    } finally {
-        updateWorking(false);
-    }
-}
-
 async function handleRefreshClick() {
     if (state.working) {
         return;
     }
-    updateWorking(true, "Refreshing cache...");
+    const snapshot = gatherFormSettings();
+    const settingsChanged = !settingsEqual(snapshot, state.settings);
+    updateWorking(true, settingsChanged ? "Saving settings..." : "Refreshing cache...");
     try {
+        if (settingsChanged) {
+            const saved = await saveSettings(snapshot);
+            state.settings = saved;
+            updateTheme();
+            updateCacheInfo();
+            showStatus("Settings saved. Refreshing cache...");
+        } else {
+            showStatus("Refreshing cache...");
+        }
         const response = await requestCacheRefresh({ reason: "manual" });
         if (response?.ok) {
             const count = response.summary?.blockCount || 0;
@@ -192,28 +202,23 @@ function updateTheme() {
 
 function updateWorking(isWorking, message) {
     state.working = isWorking;
-    if (elements.testButton) {
-        elements.testButton.disabled = isWorking;
-    }
     if (elements.refreshButton) {
         elements.refreshButton.disabled = isWorking;
     }
     if (elements.form) {
         elements.form.querySelectorAll("button, input, textarea, select").forEach((node) => {
-            if (node.dataset.persistent === "true") {
+            if (node.dataset.persistent === "true" || node === elements.refreshButton) {
                 return;
             }
             if (isWorking) {
                 node.setAttribute("data-prev-disabled", node.disabled ? "1" : "0");
-                if (node.type !== "submit" && node !== elements.testButton && node !== elements.refreshButton) {
-                    node.disabled = true;
-                }
+                node.disabled = true;
             } else {
                 if (node.hasAttribute("data-prev-disabled")) {
                     const wasDisabled = node.getAttribute("data-prev-disabled") === "1";
                     node.disabled = wasDisabled;
                     node.removeAttribute("data-prev-disabled");
-                } else if (node !== elements.testButton && node !== elements.refreshButton) {
+                } else {
                     node.disabled = false;
                 }
             }
@@ -287,6 +292,48 @@ function handleStorageChange(changes, area) {
             updateCacheInfo();
         });
     }
+}
+
+function updateBlockCountOutput() {
+    if (!elements.blockCountOutput || !elements.blockCount) {
+        return;
+    }
+    elements.blockCountOutput.textContent = elements.blockCount.value;
+}
+
+function updateTileSizeOutput() {
+    if (!elements.tileSizeOutput || !elements.tileSize) {
+        return;
+    }
+    const index = Number(elements.tileSize.value || 0);
+    const label = TILE_SIZE_OPTIONS[index] || TILE_SIZE_OPTIONS[0];
+    const displayLabel = label === "auto" ? "AUTO" : label.toUpperCase();
+    const ariaLabel = TILE_SIZE_LABEL_MAP[label] || label.toUpperCase();
+    elements.tileSizeOutput.textContent = displayLabel;
+    elements.tileSize.setAttribute("aria-valuetext", ariaLabel);
+}
+
+function settingsEqual(next, current) {
+    if (!current) {
+        return false;
+    }
+    return (
+        arraysEqual(next.channelSlugs, current.channelSlugs) &&
+        arraysEqual(next.blockIds, current.blockIds) &&
+        arraysEqual(next.filters, current.filters) &&
+        next.blockCount === current.blockCount &&
+        next.showHeader === current.showHeader &&
+        next.showFooter === current.showFooter &&
+        next.theme === current.theme &&
+        next.tileSize === current.tileSize
+    );
+}
+
+function arraysEqual(a = [], b = []) {
+    if (a.length !== b.length) {
+        return false;
+    }
+    return a.every((value, index) => value === b[index]);
 }
 
 init();

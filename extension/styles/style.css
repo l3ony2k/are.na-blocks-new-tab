@@ -138,6 +138,8 @@ body ::-moz-selection {
     align-items: center;
     gap: 6px;
     transition: background-color 0.2s ease;
+    font-size: 12px;
+    font-family: inherit;
 }
 
 .bookmark-link:hover,
@@ -155,6 +157,135 @@ body ::-moz-selection {
 #bookmark-strip.scrolling {
     overflow-x: auto;
     padding-bottom: 4px;
+    scrollbar-width: none;
+}
+
+#bookmark-strip.scrolling::-webkit-scrollbar {
+    display: none;
+}
+
+.bookmark-folder {
+    position: relative;
+}
+
+.bookmark-trigger {
+    background-color: var(--button-bg);
+    border: 1px solid var(--block-border);
+    color: var(--text-color);
+    padding: 4px 10px;
+    font-size: 12px;
+    font-family: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.bookmark-trigger::after {
+    content: "▾";
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.bookmark-trigger:hover,
+.bookmark-trigger:focus-visible {
+    background-color: var(--button-hover);
+    outline: none;
+}
+
+.bookmark-trigger:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.bookmark-menu,
+.bookmark-submenu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    margin: 6px 0 0;
+    padding: 6px 0;
+    list-style: none;
+    background-color: var(--block-bg);
+    border: 1px solid var(--block-border);
+    box-shadow: 6px 6px 0 var(--shadow-color);
+    z-index: 20;
+}
+
+.bookmark-menu {
+    display: none;
+}
+
+.bookmark-folder.is-open > .bookmark-menu {
+    display: block;
+}
+
+.bookmark-submenu {
+    display: none;
+    top: 0;
+    left: 100%;
+    margin-left: 6px;
+}
+
+.bookmark-menu-item {
+    position: relative;
+    display: flex;
+}
+
+.bookmark-menu-divider {
+    height: 1px;
+    margin: 6px 0;
+    background-color: var(--block-border);
+}
+
+.bookmark-menu-link,
+.bookmark-menu-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 14px;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--text-color);
+    font-size: 12px;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.bookmark-menu-link:hover,
+.bookmark-menu-link:focus-visible,
+.bookmark-menu-button:hover,
+.bookmark-menu-button:focus-visible {
+    background-color: var(--button-hover);
+    outline: none;
+}
+
+.bookmark-menu-button {
+    text-align: left;
+}
+
+.bookmark-menu-button:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.bookmark-menu-arrow {
+    font-size: 10px;
+    margin-left: auto;
+}
+
+.bookmark-menu-item.has-children.submenu-open > .bookmark-submenu,
+.bookmark-menu-item.has-children:hover > .bookmark-submenu {
+    display: block;
 }
 
 .button {
@@ -162,8 +293,8 @@ body ::-moz-selection {
     border: 1px solid var(--block-border);
     color: var(--text-color);
     font-family: inherit;
-    font-size: 14px;
-    padding: 4px 12px;
+    font-size: 12px;
+    padding: 4px 10px;
     cursor: pointer;
     transition: background-color 0.2s ease;
     text-decoration: none;
@@ -420,7 +551,14 @@ label.setting-label {
     font-size: 0.95rem;
 }
 
+p.setting-label {
+    margin: 12px 0 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
 label.inline {
+    display: inline-flex;
     flex-direction: row;
     align-items: center;
     gap: 10px;
@@ -443,9 +581,55 @@ textarea {
     min-height: 80px;
 }
 
+.slider-field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.slider-field input[type="range"] {
+    flex: 1;
+    accent-color: var(--block-border);
+}
+
+.slider-field output {
+    min-width: 36px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px 16px;
+}
+
+.theme-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.toggle-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 8px;
+}
+
 .settings-actions {
     display: flex;
     gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.settings-actions--compact {
+    gap: 8px;
+}
+
+.settings-actions--compact .notice {
+    flex: 1 1 200px;
 }
 
 .notice {
@@ -464,7 +648,9 @@ textarea {
     gap: 8px;
     background-color: var(--button-bg);
     border: 1px solid var(--block-border);
-    padding: 6px 10px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-family: inherit;
 }
 
 .status-led {

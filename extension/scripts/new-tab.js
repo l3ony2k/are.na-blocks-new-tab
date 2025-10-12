@@ -45,6 +45,7 @@ const elements = {
 };
 
 let resizeTimer = null;
+const openBookmarkFolders = new Set();
 
 async function init() {
     try {
@@ -74,6 +75,11 @@ function wireEvents() {
         runtime.onMessage.addListener(handleRuntimeMessage);
     }
     window.addEventListener("resize", handleResize, { passive: true });
+    if (elements.bookmarkStrip) {
+        elements.bookmarkStrip.addEventListener("wheel", handleBookmarkWheel, { passive: false });
+    }
+    document.addEventListener("pointerdown", handleDocumentPointerDown, true);
+    document.addEventListener("keydown", handleDocumentKeyDown);
 }
 
 async function renderAll() {
@@ -98,6 +104,7 @@ async function renderBookmarks() {
     if (!strip) {
         return;
     }
+    closeAllBookmarkFolders();
     strip.textContent = "";
     strip.classList.remove("scrolling");
     if (!state.settings?.showHeader) {
@@ -112,9 +119,19 @@ async function renderBookmarks() {
         const tree = await bookmarks.getTree();
         const rootChildren = tree[0]?.children || [];
         const bar = rootChildren.find((node) => node.id === "1" || (node.title && node.title.toLowerCase().includes("bookmark")));
-        const collected = [];
-        collectBookmarks(bar?.children || rootChildren, collected, 12);
-        if (!collected.length) {
+        const nodes = (bar?.children || rootChildren || []).filter(Boolean);
+        const fragment = document.createDocumentFragment();
+        for (const node of nodes) {
+            if (node.type === "separator") {
+                continue;
+            }
+            if (node.url) {
+                fragment.appendChild(createBookmarkLink(node));
+            } else if (node.children?.length) {
+                fragment.appendChild(createBookmarkFolder(node));
+            }
+        }
+        if (!fragment.childElementCount) {
             const template = elements.bookmarkEmptyTemplate?.content?.cloneNode(true);
             if (template) {
                 strip.appendChild(template);
@@ -123,12 +140,12 @@ async function renderBookmarks() {
             }
             return;
         }
-        for (const item of collected) {
-            strip.appendChild(createBookmarkNode(item));
-        }
-        if (strip.scrollWidth > strip.clientWidth) {
-            strip.classList.add("scrolling");
-        }
+        strip.appendChild(fragment);
+        requestAnimationFrame(() => {
+            if (strip.scrollWidth > strip.clientWidth) {
+                strip.classList.add("scrolling");
+            }
+        });
     } catch (error) {
         console.error("Failed to load bookmarks", error);
         strip.textContent = "Bookmarks unavailable";
@@ -138,22 +155,9 @@ async function renderBookmarks() {
     }
 }
 
-function collectBookmarks(nodes, bucket, limit) {
-    for (const node of nodes) {
-        if (bucket.length >= limit) {
-            break;
-        }
-        if (node.url) {
-            bucket.push(node);
-        } else if (node.children) {
-            collectBookmarks(node.children, bucket, limit);
-        }
-    }
-}
-
-function createBookmarkNode(node) {
+function createBookmarkLink(node, className = "bookmark-link") {
     const link = document.createElement("a");
-    link.className = "bookmark-link";
+    link.className = className;
     link.href = node.url;
     link.target = "_blank";
     link.rel = "noopener";
@@ -173,6 +177,232 @@ function createBookmarkNode(node) {
 
     link.append(favicon, label);
     return link;
+}
+
+function createBookmarkFolder(node) {
+    const container = document.createElement("div");
+    container.className = "bookmark-folder";
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "bookmark-trigger";
+    trigger.title = node.title || "Folder";
+    trigger.setAttribute("aria-haspopup", "true");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.textContent = node.title || "Folder";
+
+    const menu = buildBookmarkMenu(node.children || [], 0);
+    if (!menu.childElementCount) {
+        trigger.disabled = true;
+        trigger.setAttribute("aria-disabled", "true");
+        container.appendChild(trigger);
+        return container;
+    }
+
+    menu.hidden = true;
+    container.appendChild(trigger);
+    container.appendChild(menu);
+
+    const controller = {
+        close() {
+            trigger.setAttribute("aria-expanded", "false");
+            container.classList.remove("is-open");
+            menu.hidden = true;
+            openBookmarkFolders.delete(controller);
+        }
+    };
+
+    controller.open = () => {
+        closeAllBookmarkFolders(controller);
+        container.classList.add("is-open");
+        trigger.setAttribute("aria-expanded", "true");
+        menu.hidden = false;
+        menu.scrollTop = 0;
+        openBookmarkFolders.add(controller);
+    };
+
+    trigger.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (container.classList.contains("is-open")) {
+            controller.close();
+        } else {
+            controller.open();
+        }
+    });
+
+    trigger.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            if (!container.classList.contains("is-open")) {
+                controller.open();
+            }
+            const firstItem = menu.querySelector("a, button");
+            firstItem?.focus();
+        } else if (event.key === "Escape") {
+            controller.close();
+        }
+    });
+
+    container.addEventListener("mouseleave", (event) => {
+        if (!container.contains(event.relatedTarget)) {
+            controller.close();
+        }
+    });
+
+    return container;
+}
+
+function buildBookmarkMenu(nodes, level = 0) {
+    const menu = document.createElement("ul");
+    menu.className = level === 0 ? "bookmark-menu" : "bookmark-submenu";
+    menu.setAttribute("role", "menu");
+
+    for (const child of nodes) {
+        if (!child) {
+            continue;
+        }
+        if (child.type === "separator") {
+            const divider = document.createElement("li");
+            divider.className = "bookmark-menu-divider";
+            menu.appendChild(divider);
+            continue;
+        }
+        if (child.url) {
+            menu.appendChild(createBookmarkMenuLink(child));
+        } else if (child.children?.length) {
+            const folderItem = createBookmarkMenuFolder(child, level + 1);
+            if (folderItem) {
+                menu.appendChild(folderItem);
+            }
+        }
+    }
+
+    return menu;
+}
+
+function createBookmarkMenuLink(node) {
+    const item = document.createElement("li");
+    item.className = "bookmark-menu-item";
+    const link = createBookmarkLink(node, "bookmark-menu-link");
+    link.tabIndex = -1;
+    item.appendChild(link);
+    return item;
+}
+
+function createBookmarkMenuFolder(node, level) {
+    const item = document.createElement("li");
+    item.className = "bookmark-menu-item has-children";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "bookmark-menu-button";
+    button.setAttribute("aria-haspopup", "true");
+    button.setAttribute("aria-expanded", "false");
+    const label = document.createElement("span");
+    label.textContent = node.title || "Folder";
+    const arrow = document.createElement("span");
+    arrow.className = "bookmark-menu-arrow";
+    arrow.textContent = "›";
+    button.append(label, arrow);
+
+    const submenu = buildBookmarkMenu(node.children || [], level);
+    if (!submenu.childElementCount) {
+        return null;
+    }
+    submenu.hidden = true;
+
+    function openSubmenu() {
+        item.classList.add("submenu-open");
+        submenu.hidden = false;
+        button.setAttribute("aria-expanded", "true");
+    }
+
+    function closeSubmenu() {
+        item.classList.remove("submenu-open");
+        submenu.hidden = true;
+        button.setAttribute("aria-expanded", "false");
+    }
+
+    button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (item.classList.contains("submenu-open")) {
+            closeSubmenu();
+        } else {
+            openSubmenu();
+            const firstItem = submenu.querySelector("a, button");
+            firstItem?.focus();
+        }
+    });
+
+    button.addEventListener("mouseenter", openSubmenu);
+    button.addEventListener("focus", openSubmenu);
+    item.addEventListener("mouseleave", (event) => {
+        if (!item.contains(event.relatedTarget)) {
+            closeSubmenu();
+        }
+    });
+
+    button.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight") {
+            event.preventDefault();
+            openSubmenu();
+            const firstItem = submenu.querySelector("a, button");
+            firstItem?.focus();
+        } else if (event.key === "ArrowLeft" || event.key === "Escape") {
+            event.preventDefault();
+            closeSubmenu();
+            button.focus();
+        }
+    });
+
+    item.appendChild(button);
+    item.appendChild(submenu);
+    return item;
+}
+
+function closeAllBookmarkFolders(except) {
+    const controllers = Array.from(openBookmarkFolders);
+    for (const controller of controllers) {
+        if (controller !== except) {
+            controller.close();
+        }
+    }
+    if (!except) {
+        openBookmarkFolders.clear();
+    }
+}
+
+function handleDocumentPointerDown(event) {
+    if (!openBookmarkFolders.size) {
+        return;
+    }
+    if (!event.target.closest(".bookmark-folder")) {
+        closeAllBookmarkFolders();
+    }
+}
+
+function handleDocumentKeyDown(event) {
+    if (event.key === "Escape") {
+        closeAllBookmarkFolders();
+    }
+}
+
+function handleBookmarkWheel(event) {
+    const strip = elements.bookmarkStrip;
+    if (!strip || !strip.classList.contains("scrolling")) {
+        return;
+    }
+    const delta =
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)
+            ? event.deltaX
+            : event.deltaY;
+    if (!delta) {
+        return;
+    }
+    event.preventDefault();
+    strip.scrollLeft += delta;
 }
 
 function renderBlocks() {

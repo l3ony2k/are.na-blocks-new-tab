@@ -14,7 +14,7 @@
         </header>
         <main id="content-area">
             <form class="settings-form" id="settings-form">
-                <fieldset>
+                <fieldset data-section="sources">
                     <legend>Content Sources</legend>
                     <label class="setting-label" for="channel-slugs">Channel slugs</label>
                     <textarea id="channel-slugs" name="channelSlugs" placeholder="design-inspiration, architectural-brutalism"></textarea>
@@ -24,55 +24,57 @@
                     <textarea id="block-ids" name="blockIds" placeholder="12345, 67890"></textarea>
                     <span class="notice">Comma-separated Are.na block IDs (numbers). Optional.</span>
 
-                    <div class="settings-actions">
-                        <button class="button" type="button" id="test-sources">Test sources</button>
+                    <div class="settings-actions settings-actions--compact">
                         <button class="button" type="button" id="refresh-sources">Refresh cache</button>
                         <span class="notice" id="cache-info">Cache idle</span>
                     </div>
                 </fieldset>
 
-                <fieldset>
+                <fieldset data-section="filters">
+                    <legend>Content filters</legend>
+                    <div class="filters-grid">
+                        <label class="inline"><input type="checkbox" name="filters" value="Image" checked> <span>Image</span></label>
+                        <label class="inline"><input type="checkbox" name="filters" value="Text"> <span>Text</span></label>
+                        <label class="inline"><input type="checkbox" name="filters" value="Link"> <span>Link</span></label>
+                        <label class="inline"><input type="checkbox" name="filters" value="Attachment"> <span>Attachment</span></label>
+                        <label class="inline"><input type="checkbox" name="filters" value="Embed"> <span>Embed</span></label>
+                        <label class="inline"><input type="checkbox" name="filters" value="Channel"> <span>Channel</span></label>
+                    </div>
+                </fieldset>
+
+                <fieldset data-section="display">
                     <legend>Display</legend>
                     <label class="setting-label" for="block-count">Number of blocks</label>
-                    <input id="block-count" name="blockCount" type="number" min="1" max="6" step="1" value="3">
+                    <div class="slider-field">
+                        <input id="block-count" name="blockCount" type="range" min="1" max="6" step="1" value="3">
+                        <output id="block-count-output" for="block-count">3</output>
+                    </div>
                     <span class="notice">Choose how many random blocks are shown each time you open a new tab.</span>
 
                     <label class="setting-label" for="tile-size">Block size</label>
-                    <select id="tile-size" name="tileSize">
-                        <option value="auto">Auto</option>
-                        <option value="xs">XS</option>
-                        <option value="s">S</option>
-                        <option value="m">M</option>
-                        <option value="l">L</option>
-                        <option value="xl">XL</option>
-                    </select>
-                    <span class="notice">Auto adapts to the viewport; XS–XL lock in a fixed tile size.</span>
+                    <div class="slider-field">
+                        <input id="tile-size" name="tileSize" type="range" min="0" max="5" step="1" value="0">
+                        <output id="tile-size-output" for="tile-size">AUTO</output>
+                    </div>
+                    <span class="notice">Auto adapts to the viewport; XS-XL lock in a fixed tile size.</span>
 
-                    <label class="inline">
-                        <input type="checkbox" id="show-header" name="showHeader" checked>
-                        <span>Show header with bookmarks</span>
-                    </label>
-                    <label class="inline">
-                        <input type="checkbox" id="show-footer" name="showFooter" checked>
-                        <span>Show footer information</span>
-                    </label>
-                </fieldset>
+                    <p class="setting-label">Theme</p>
+                    <div class="theme-options">
+                        <label class="inline"><input type="radio" name="theme" value="system" checked> <span>System</span></label>
+                        <label class="inline"><input type="radio" name="theme" value="light"> <span>Light</span></label>
+                        <label class="inline"><input type="radio" name="theme" value="dark"> <span>Dark</span></label>
+                    </div>
 
-                <fieldset>
-                    <legend>Content filters</legend>
-                    <label class="inline"><input type="checkbox" name="filters" value="Image" checked> <span>Image</span></label>
-                    <label class="inline"><input type="checkbox" name="filters" value="Text"> <span>Text</span></label>
-                    <label class="inline"><input type="checkbox" name="filters" value="Link"> <span>Link</span></label>
-                    <label class="inline"><input type="checkbox" name="filters" value="Attachment"> <span>Attachment</span></label>
-                    <label class="inline"><input type="checkbox" name="filters" value="Embed"> <span>Embed</span></label>
-                    <label class="inline"><input type="checkbox" name="filters" value="Channel"> <span>Channel</span></label>
-                </fieldset>
-
-                <fieldset>
-                    <legend>Theme</legend>
-                    <label class="inline"><input type="radio" name="theme" value="system" checked> <span>System</span></label>
-                    <label class="inline"><input type="radio" name="theme" value="light"> <span>Light</span></label>
-                    <label class="inline"><input type="radio" name="theme" value="dark"> <span>Dark</span></label>
+                    <div class="toggle-group">
+                        <label class="inline">
+                            <input type="checkbox" id="show-header" name="showHeader" checked>
+                            <span>Show header with bookmarks</span>
+                        </label>
+                        <label class="inline">
+                            <input type="checkbox" id="show-footer" name="showFooter" checked>
+                            <span>Show footer information</span>
+                        </label>
+                    </div>
                 </fieldset>
 
                 <div class="settings-actions">
@@ -84,7 +86,7 @@
         </main>
         <footer id="footer-bar">
             <span>Are.na New Tab Â· Settings</span>
-            <a href="https://github.com/leon" target="_blank" rel="noopener">Project repo</a>
+            <a class="button" href="https://github.com/leon" target="_blank" rel="noopener">Project repo</a>
         </footer>
     </div>
 </body>
