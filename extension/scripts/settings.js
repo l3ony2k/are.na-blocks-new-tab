@@ -28,7 +28,8 @@ const elements = {
     filters: document.querySelectorAll("input[name='filters']"),
     themeRadios: document.querySelectorAll("input[name='theme']"),
     cacheInfo: document.getElementById("cache-info"),
-    refreshButton: document.getElementById("refresh-sources")
+    sourcesSaveButton: document.getElementById("save-refresh"),
+    displaySaveButton: document.getElementById("save-display")
 };
 
 const TILE_SIZE_LABEL_MAP = {
@@ -94,7 +95,6 @@ function populateForm() {
 }
 
 function wireEvents() {
-    elements.form?.addEventListener("submit", handleSubmit);
     elements.form?.addEventListener("reset", handleReset);
     elements.blockCount?.addEventListener("input", updateBlockCountOutput);
     elements.tileSize?.addEventListener("input", updateTileSizeOutput);
@@ -106,7 +106,8 @@ function wireEvents() {
             }
         });
     });
-    elements.refreshButton?.addEventListener("click", handleRefreshClick);
+    elements.sourcesSaveButton?.addEventListener("click", handleSourcesSave);
+    elements.displaySaveButton?.addEventListener("click", handleDisplaySave);
 
     if (runtime?.onMessage) {
         runtime.onMessage.addListener(handleRuntimeMessage);
@@ -116,38 +117,53 @@ function wireEvents() {
     }
 }
 
-function gatherFormSettings() {
+function gatherSourceSettings() {
     const channelSlugs = parseChannelSlugs(elements.channelSlugs?.value || "");
     const blockIds = parseBlockIds(elements.blockIds?.value || "");
+    let filters = Array.from(document.querySelectorAll("input[name='filters']:checked"), (input) => input.value);
+    if (!filters.length) {
+        filters = [...BLOCK_TYPES];
+    }
+    return { channelSlugs, blockIds, filters };
+}
+
+function gatherDisplaySettings() {
     let blockCount = Number(elements.blockCount?.value || DEFAULT_SETTINGS.blockCount);
     blockCount = Math.min(6, Math.max(1, blockCount));
     const showHeader = Boolean(elements.showHeader?.checked);
     const showFooter = Boolean(elements.showFooter?.checked);
     const tileIndex = Number(elements.tileSize?.value || 0);
     const tileSize = TILE_SIZE_OPTIONS[tileIndex] || DEFAULT_SETTINGS.tileSize;
-    let filters = Array.from(document.querySelectorAll("input[name='filters']:checked"), (input) => input.value);
-    if (!filters.length) {
-        filters = [...BLOCK_TYPES];
-    }
     const themeRadio = document.querySelector("input[name='theme']:checked");
     const theme = themeRadio ? themeRadio.value : DEFAULT_SETTINGS.theme;
-
-    return { channelSlugs, blockIds, blockCount, showHeader, showFooter, filters, theme, tileSize };
+    return { blockCount, showHeader, showFooter, tileSize, theme };
 }
 
-async function handleSubmit(event) {
+function gatherFormSettings() {
+    return {
+        ...gatherSourceSettings(),
+        ...gatherDisplaySettings()
+    };
+}
+
+async function handleDisplaySave(event) {
     event.preventDefault();
     if (state.working) {
         return;
     }
-    const nextSettings = gatherFormSettings();
-    updateWorking(true, "Saving settings...");
+    const displaySettings = gatherDisplaySettings();
+    const nextSettings = { ...state.settings, ...displaySettings };
+    if (settingsEqual(nextSettings, state.settings)) {
+        showStatus("Display settings are already saved.");
+        return;
+    }
+    updateWorking(true, "Saving display settings...");
     try {
         const saved = await saveSettings(nextSettings);
         state.settings = saved;
         updateTheme();
         updateCacheInfo();
-        showStatus("Settings saved. Use Refresh cache to pull new blocks.");
+        showStatus("Display settings saved.");
     } catch (error) {
         console.error("Failed to save settings", error);
         showStatus(`Save failed: ${error.message}`);
@@ -158,26 +174,29 @@ async function handleSubmit(event) {
 
 function handleReset(event) {
     event.preventDefault();
+    state.settings = { ...DEFAULT_SETTINGS };
     populateForm();
     updateTheme();
     updateCacheInfo();
-    showStatus("Reset to stored settings");
+    showStatus("Reset to default settings. Save to apply.");
 }
 
-async function handleRefreshClick() {
+async function handleSourcesSave(event) {
+    event?.preventDefault?.();
     if (state.working) {
         return;
     }
-    const snapshot = gatherFormSettings();
+    const formValues = gatherFormSettings();
+    const snapshot = { ...state.settings, ...formValues };
     const settingsChanged = !settingsEqual(snapshot, state.settings);
-    updateWorking(true, settingsChanged ? "Saving settings..." : "Refreshing cache...");
+    updateWorking(true, settingsChanged ? "Saving content settings..." : "Refreshing cache...");
     try {
         if (settingsChanged) {
             const saved = await saveSettings(snapshot);
             state.settings = saved;
             updateTheme();
             updateCacheInfo();
-            showStatus("Settings saved. Refreshing cache...");
+            showStatus("Content settings saved. Refreshing cache...");
         } else {
             showStatus("Refreshing cache...");
         }
@@ -202,12 +221,9 @@ function updateTheme() {
 
 function updateWorking(isWorking, message) {
     state.working = isWorking;
-    if (elements.refreshButton) {
-        elements.refreshButton.disabled = isWorking;
-    }
     if (elements.form) {
         elements.form.querySelectorAll("button, input, textarea, select").forEach((node) => {
-            if (node.dataset.persistent === "true" || node === elements.refreshButton) {
+            if (node.dataset.persistent === "true") {
                 return;
             }
             if (isWorking) {

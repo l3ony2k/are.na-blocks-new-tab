@@ -31,7 +31,8 @@ const state = {
         lastError: null,
         blockCount: 0
     },
-    currentBlocks: []
+    currentBlocks: [],
+    bootstrapAttempted: false
 };
 
 const elements = {
@@ -40,7 +41,6 @@ const elements = {
     footer: document.getElementById("footer-bar"),
     bookmarkStrip: document.getElementById("bookmark-strip"),
     blocksContainer: document.getElementById("blocks-container"),
-    cacheLed: document.getElementById("cache-led"),
     cacheLabel: document.getElementById("cache-label"),
     blockTemplate: document.getElementById("block-card-template"),
     emptyTemplate: document.querySelector("[data-empty-state]"),
@@ -146,6 +146,7 @@ async function init() {
         await hydrateState();
         wireEvents();
         await renderAll();
+        await maybeBootstrapCache();
     } catch (error) {
         console.error("Failed to initialise new tab", error);
         renderError(error);
@@ -159,6 +160,82 @@ async function hydrateState() {
     state.settings = await getSettings();
     applyTheme(state.settings.theme);
     toggleRegions();
+}
+
+async function maybeBootstrapCache() {
+    if (state.bootstrapAttempted) {
+        return;
+    }
+    state.bootstrapAttempted = true;
+
+    if (!storage?.get || !runtime?.sendMessage) {
+        return;
+    }
+
+    if (state.cache?.blockIds?.length) {
+        try {
+            await storage.set({
+                [STORAGE_KEYS.bootstrap]: {
+                    status: "complete",
+                    timestamp: Date.now()
+                }
+            });
+        } catch (_) {
+            // ignore
+        }
+        return;
+    }
+
+    try {
+        const record = await storage.get(STORAGE_KEYS.bootstrap);
+        const previous = record?.[STORAGE_KEYS.bootstrap];
+        const status = typeof previous === "string" ? previous : previous?.status;
+        if (status === "pending") {
+            return;
+        }
+        if (status === "complete") {
+            return;
+        }
+
+        await storage.set({
+            [STORAGE_KEYS.bootstrap]: {
+                status: "pending",
+                timestamp: Date.now()
+            }
+        });
+
+        state.cacheMeta = { ...state.cacheMeta, state: CACHE_STATE.working, lastError: null };
+        updateCacheStatus();
+
+        const response = await runtime.sendMessage({
+            type: MESSAGES.refreshCache,
+            payload: { reason: "bootstrap" }
+        });
+
+        if (response?.ok) {
+            await storage.set({
+                [STORAGE_KEYS.bootstrap]: {
+                    status: "complete",
+                    timestamp: Date.now()
+                }
+            });
+        } else if (response?.error) {
+            await storage.set({
+                [STORAGE_KEYS.bootstrap]: {
+                    status: "error",
+                    message: response.error,
+                    timestamp: Date.now()
+                }
+            });
+        }
+    } catch (error) {
+        console.warn("Bootstrap cache request failed", error);
+        try {
+            await storage.remove([STORAGE_KEYS.bootstrap]);
+        } catch (_) {
+            // ignore cleanup errors
+        }
+    }
 }
 
 function wireEvents() {
@@ -1226,29 +1303,12 @@ function formatLinkLabel(url) {
 }
 
 function updateCacheStatus() {
-    const led = elements.cacheLed;
     const label = elements.cacheLabel;
-    if (!led && !label) {
-        return;
-    }
-    const status = state.cacheMeta?.state || CACHE_STATE.idle;
-    if (led) {
-        led.classList.remove("is-idle", "is-working", "is-error");
-        const nextClass =
-            status === CACHE_STATE.working
-                ? "is-working"
-                : status === CACHE_STATE.error
-                ? "is-error"
-                : "is-idle";
-        if (nextClass) {
-            led.classList.add(nextClass);
-        }
-        led.dataset.state = status;
-    }
-
     if (!label) {
         return;
     }
+
+    const status = state.cacheMeta?.state || CACHE_STATE.idle;
 
     switch (status) {
         case CACHE_STATE.working:

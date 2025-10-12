@@ -1,16 +1,17 @@
 export const STORAGE_KEYS = {
     settings: "settings",
     cache: "blockCache",
-    cacheMeta: "blockCacheMeta"
+    cacheMeta: "blockCacheMeta",
+    bootstrap: "bootstrapState"
 };
 
 export const DEFAULT_SETTINGS = {
-    channelSlugs: [],
+    channelSlugs: ["ephemeral-visions", "device-gadget"],
     blockIds: [],
-    blockCount: 3,
+    blockCount: 1,
     showHeader: true,
     showFooter: true,
-    filters: ["Image"],
+    filters: ["Image", "Text"],
     theme: "system",
     tileSize: "auto"
 };

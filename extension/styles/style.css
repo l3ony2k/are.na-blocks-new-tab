@@ -667,34 +667,11 @@ textarea {
 .status-badge {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
     background-color: var(--button-bg);
     border: 1px solid var(--block-border);
     padding: 4px 10px;
     font-size: 12px;
     font-family: inherit;
-}
-
-.status-led {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border: 1px solid var(--block-border);
-    background-color: var(--meta-color);
-}
-
-.status-led.is-idle {
-    background-color: var(--meta-color);
-}
-
-.status-led.is-working {
-    background-color: var(--link-color);
-    border-color: var(--link-color);
-}
-
-.status-led.is-error {
-    background-color: #e25555;
-    border-color: #e25555;
 }
 
 /* --- Scrollbar Styling ----------------------------------------------------- */

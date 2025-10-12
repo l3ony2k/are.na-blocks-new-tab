@@ -24,21 +24,20 @@
                     <textarea id="block-ids" name="blockIds" placeholder="12345, 67890"></textarea>
                     <span class="notice">Comma-separated Are.na block IDs (numbers). Optional.</span>
 
-                    <div class="settings-actions settings-actions--compact">
-                        <button class="button" type="button" id="refresh-sources">Refresh cache</button>
-                        <span class="notice" id="cache-info">Cache idle</span>
-                    </div>
-                </fieldset>
-
-                <fieldset data-section="filters">
-                    <legend>Content filters</legend>
+                    <p class="setting-label">Content filters</p>
                     <div class="filters-grid">
                         <label class="inline"><input type="checkbox" name="filters" value="Image" checked> <span>Image</span></label>
-                        <label class="inline"><input type="checkbox" name="filters" value="Text"> <span>Text</span></label>
+                        <label class="inline"><input type="checkbox" name="filters" value="Text" checked> <span>Text</span></label>
                         <label class="inline"><input type="checkbox" name="filters" value="Link"> <span>Link</span></label>
                         <label class="inline"><input type="checkbox" name="filters" value="Attachment"> <span>Attachment</span></label>
                         <label class="inline"><input type="checkbox" name="filters" value="Embed"> <span>Embed</span></label>
                         <label class="inline"><input type="checkbox" name="filters" value="Channel"> <span>Channel</span></label>
+                    </div>
+                    <span class="notice">Select the block types to include when refreshing the cache.</span>
+
+                    <div class="settings-actions settings-actions--compact">
+                        <button class="button" type="button" id="save-refresh">Save &amp; Refresh</button>
+                        <span class="notice" id="cache-info">Cache idle</span>
                     </div>
                 </fieldset>
 
@@ -46,8 +45,8 @@
                     <legend>Display</legend>
                     <label class="setting-label" for="block-count">Number of blocks</label>
                     <div class="slider-field">
-                        <input id="block-count" name="blockCount" type="range" min="1" max="6" step="1" value="3">
-                        <output id="block-count-output" for="block-count">3</output>
+                        <input id="block-count" name="blockCount" type="range" min="1" max="6" step="1" value="1">
+                        <output id="block-count-output" for="block-count">1</output>
                     </div>
                     <span class="notice">Choose how many random blocks are shown each time you open a new tab.</span>
 
@@ -75,11 +74,14 @@
                             <span>Show footer information</span>
                         </label>
                     </div>
+
+                    <div class="settings-actions settings-actions--compact">
+                        <button class="button" type="button" id="save-display">Save display settings</button>
+                    </div>
                 </fieldset>
 
                 <div class="settings-actions">
-                    <button class="button" type="submit">Save settings</button>
-                    <button class="button" type="reset">Reset</button>
+                    <button class="button" type="reset">Reset to defaults</button>
                     <a class="button" href="new-tab.html" target="_blank" rel="noopener">Open new tab preview</a>
                 </div>
             </form>
