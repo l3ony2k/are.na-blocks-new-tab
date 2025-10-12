@@ -7,14 +7,14 @@ import { applyTheme } from "./theme.js";
 import { toPlainText } from "./sanitize.js";
 
 const TILE_SIZE_MAP = {
-    xs: 180,
-    s: 220,
-    m: 260,
-    l: 320,
-    xl: 380
+    xs: 225,
+    s: 260,
+    m: 310,
+    l: 360,
+    xl: 420
 };
 
-const AUTO_TILE_SIZES = [360, 320, 280, 240, 200, 180];
+const AUTO_TILE_SIZES = [420, 360, 320, 300, 260, 225];
 const TILE_GAP = 18;
 const INFO_HEIGHT = 150;
 const RESIZE_DEBOUNCE = 150;
@@ -208,6 +208,7 @@ function createBookmarkFolder(node) {
             trigger.setAttribute("aria-expanded", "false");
             container.classList.remove("is-open");
             menu.hidden = true;
+            menu.setAttribute("hidden", "");
             openBookmarkFolders.delete(controller);
         }
     };
@@ -217,6 +218,7 @@ function createBookmarkFolder(node) {
         container.classList.add("is-open");
         trigger.setAttribute("aria-expanded", "true");
         menu.hidden = false;
+        menu.removeAttribute("hidden");
         menu.scrollTop = 0;
         openBookmarkFolders.add(controller);
     };
@@ -315,12 +317,14 @@ function createBookmarkMenuFolder(node, level) {
     function openSubmenu() {
         item.classList.add("submenu-open");
         submenu.hidden = false;
+        submenu.removeAttribute("hidden");
         button.setAttribute("aria-expanded", "true");
     }
 
     function closeSubmenu() {
         item.classList.remove("submenu-open");
         submenu.hidden = true;
+        submenu.setAttribute("hidden", "");
         button.setAttribute("aria-expanded", "false");
     }
 
@@ -454,6 +458,9 @@ function renderLayout(blocks) {
 
     container.style.setProperty("--tile-size", `${tileSize}px`);
     container.style.setProperty("--tile-gap", `${TILE_GAP}px`);
+    const isCompact = tileSize <= TILE_SIZE_MAP.s;
+    container.style.setProperty("--block-title-size", isCompact ? "0.9rem" : "1rem");
+    container.style.setProperty("--block-meta-size", isCompact ? "0.6rem" : "0.7rem");
 
     let index = 0;
     layout.rows.forEach((columns) => {

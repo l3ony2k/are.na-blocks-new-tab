@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Are.na Blocks New Tab",
+  "name": "are.na blocks new tab",
+  "short_name": "ABNT",
   "description": "Replace the new tab page with curated Are.na blocks using your favorite channels and custom settings.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "chrome_url_overrides": {
     "newtab": "pages/new-tab.html"
   },

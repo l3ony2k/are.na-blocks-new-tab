@@ -1,4 +1,4 @@
-# Are.na New Tab Extension — Getting Started
+# are.na blocks new tab (ABNT) — Getting Started
 
 This project extends Chrome and Firefox with a custom new tab page styled after the `style-ref.css` reference. It surfaces random Are.na blocks from the channels and block IDs you choose, and keeps a local cache so each tab opens instantly.
 

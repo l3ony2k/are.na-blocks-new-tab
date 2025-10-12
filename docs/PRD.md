@@ -2,7 +2,7 @@ Of course. Here is a structured Product Requirements Document (PRD) based on you
 
 ***
 
-## Product Requirements Document: Are.na New Tab Extension
+## Product Requirements Document: are.na blocks new tab (ABNT)
 
 ### 1. Overview
 This document outlines the requirements for a cross-browser (Chrome & Firefox) new tab extension designed for [Are.na](https://www.are.na/) users. The extension will replace the default new tab page with a dynamic display of random blocks from user-specified Are.na channels or block lists. The goal is to provide users with a personalized, inspirational, and functional start page that surfaces their saved content and provides quick access to browser bookmarks.

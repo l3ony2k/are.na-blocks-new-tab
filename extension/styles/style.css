@@ -447,7 +447,7 @@ body[data-page="settings"] #blocks-container {
 }
 
 .block-title {
-    font-size: 1rem;
+    font-size: var(--block-title-size, 1rem);
     font-weight: 600;
     margin: 0;
     display: -webkit-box;
@@ -477,7 +477,7 @@ body[data-page="settings"] #blocks-container {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 0.7rem;
+    font-size: var(--block-meta-size, 0.7rem);
     color: var(--meta-color);
     text-transform: uppercase;
     letter-spacing: 0.04em;
