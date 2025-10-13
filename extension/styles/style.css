@@ -566,6 +566,30 @@ form.settings-form legend {
     padding: 0 6px;
 }
 
+.settings-about {
+    border: 1px solid var(--block-border);
+    background-color: var(--block-bg);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-about h2 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.settings-about h3 {
+    margin: 12px 0 4px;
+    font-size: 1rem;
+}
+
+.settings-about p {
+    margin: 0;
+    line-height: 1.5;
+}
+
 label.setting-label {
     display: flex;
     flex-direction: column;
@@ -664,14 +688,18 @@ textarea {
     display: none !important;
 }
 
-.status-badge {
+.status-button {
     display: inline-flex;
     align-items: center;
-    background-color: var(--button-bg);
-    border: 1px solid var(--block-border);
-    padding: 4px 10px;
+    gap: 6px;
     font-size: 12px;
-    font-family: inherit;
+    padding: 4px 12px;
+}
+
+.status-button[disabled] {
+    opacity: 0.6;
+    cursor: default;
+    pointer-events: none;
 }
 
 /* --- Scrollbar Styling ----------------------------------------------------- */

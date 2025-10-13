@@ -3,7 +3,7 @@
   "name": "are.na blocks new tab",
   "short_name": "abnt",
   "description": "Replace the new tab page with curated Are.na blocks using your favorite channels and custom settings.",
-    "version": "0.1.10",
+    "version": "0.1.11",
   "chrome_url_overrides": {
     "newtab": "pages/new-tab.html"
   },

@@ -21,6 +21,7 @@ const RESIZE_DEBOUNCE = 150;
 const BOOKMARK_MENU_OFFSET = 4;
 const BOOKMARK_SUBMENU_OFFSET = 6;
 const BOOKMARK_OVERFLOW_TOLERANCE = 2;
+const CACHE_STALE_THRESHOLD = 60 * 60 * 1000;
 
 const state = {
     settings: null,
@@ -41,6 +42,7 @@ const elements = {
     footer: document.getElementById("footer-bar"),
     bookmarkStrip: document.getElementById("bookmark-strip"),
     blocksContainer: document.getElementById("blocks-container"),
+    cacheButton: document.getElementById("cache-status-button"),
     cacheLabel: document.getElementById("cache-label"),
     blockTemplate: document.getElementById("block-card-template"),
     emptyTemplate: document.querySelector("[data-empty-state]"),
@@ -50,6 +52,7 @@ const elements = {
 
 let resizeTimer = null;
 const openBookmarkFolders = new Set();
+let cacheRefreshPromise = null;
 
 function setMenuLayerActive(isActive) {
     const layer = elements.bookmarkMenuLayer;
@@ -147,6 +150,7 @@ async function init() {
         wireEvents();
         await renderAll();
         await maybeBootstrapCache();
+        await maybeRefreshStaleCache();
     } catch (error) {
         console.error("Failed to initialise new tab", error);
         renderError(error);
@@ -204,26 +208,18 @@ async function maybeBootstrapCache() {
             }
         });
 
-        state.cacheMeta = { ...state.cacheMeta, state: CACHE_STATE.working, lastError: null };
-        updateCacheStatus();
-
-        const response = await runtime.sendMessage({
-            type: MESSAGES.refreshCache,
-            payload: { reason: "bootstrap" }
-        });
-
-        if (response?.ok) {
+        const success = await triggerCacheRefresh("bootstrap");
+        if (success) {
             await storage.set({
                 [STORAGE_KEYS.bootstrap]: {
                     status: "complete",
                     timestamp: Date.now()
                 }
             });
-        } else if (response?.error) {
+        } else {
             await storage.set({
                 [STORAGE_KEYS.bootstrap]: {
                     status: "error",
-                    message: response.error,
                     timestamp: Date.now()
                 }
             });
@@ -238,6 +234,20 @@ async function maybeBootstrapCache() {
     }
 }
 
+async function maybeRefreshStaleCache() {
+    if (state.cacheMeta.state === CACHE_STATE.working || cacheRefreshPromise) {
+        return;
+    }
+    const timestamp = state.cacheMeta.lastUpdated || state.cache?.fetchedAt || 0;
+    if (!timestamp) {
+        return;
+    }
+    if (Date.now() - timestamp < CACHE_STALE_THRESHOLD) {
+        return;
+    }
+    await triggerCacheRefresh("stale");
+}
+
 function wireEvents() {
     if (storage?.onChanged) {
         storage.onChanged.addListener(handleStorageChange);
@@ -250,6 +260,7 @@ function wireEvents() {
     if (elements.bookmarkStrip) {
         elements.bookmarkStrip.addEventListener("wheel", handleBookmarkWheel, { passive: false });
     }
+    elements.cacheButton?.addEventListener("click", handleCacheButtonClick);
     document.addEventListener("pointerdown", handleDocumentPointerDown, true);
     document.addEventListener("keydown", handleDocumentKeyDown);
 }
@@ -722,6 +733,100 @@ function handleBookmarkWheel(event) {
     strip.scrollLeft += delta;
 }
 
+function handleCacheButtonClick(event) {
+    event?.preventDefault?.();
+    triggerCacheRefresh("manual");
+}
+
+function triggerCacheRefresh(reason = "manual") {
+    if (!runtime?.sendMessage) {
+        return Promise.resolve(false);
+    }
+    if (cacheRefreshPromise) {
+        return cacheRefreshPromise;
+    }
+    state.cacheMeta = { ...state.cacheMeta, state: CACHE_STATE.working, lastError: null };
+    updateCacheStatus();
+    cacheRefreshPromise = (async () => {
+        try {
+            const response = await runtime.sendMessage({
+                type: MESSAGES.refreshCache,
+                payload: { reason }
+            });
+            if (response?.ok) {
+                const fetchedAt = response.summary?.fetchedAt || Date.now();
+                const blockCount = response.summary?.blockCount ?? state.cacheMeta.blockCount ?? 0;
+                state.cacheMeta = {
+                    ...state.cacheMeta,
+                    state: CACHE_STATE.idle,
+                    lastError: null,
+                    lastUpdated: fetchedAt,
+                    blockCount
+                };
+                updateCacheStatus();
+                return true;
+            }
+            if (response?.error) {
+                throw new Error(response.error);
+            }
+            state.cacheMeta = { ...state.cacheMeta, state: CACHE_STATE.idle };
+            updateCacheStatus();
+            return true;
+        } catch (error) {
+            state.cacheMeta = { ...state.cacheMeta, state: CACHE_STATE.error, lastError: error.message };
+            updateCacheStatus();
+            return false;
+        } finally {
+            cacheRefreshPromise = null;
+        }
+    })();
+    return cacheRefreshPromise;
+}
+
+function getCacheSourceCounts() {
+    const cache = state.cache || {};
+    const sources = cache.sources || {};
+    const blockCount =
+        cache.blockIds?.length ??
+        state.cacheMeta.blockCount ??
+        0;
+    const channelCount = Array.isArray(sources.channels)
+        ? sources.channels.length
+        : Array.isArray(state.settings?.channelSlugs)
+        ? state.settings.channelSlugs.length
+        : 0;
+    const blockIdCount = Array.isArray(sources.blockIds)
+        ? sources.blockIds.length
+        : Array.isArray(state.settings?.blockIds)
+        ? state.settings.blockIds.length
+        : 0;
+    return {
+        blockCount,
+        channelCount,
+        blockIdCount
+    };
+}
+
+function formatCount(value, singular, plural = `${singular}s`) {
+    return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function updateCacheSummaryTooltip() {
+    const button = elements.cacheButton;
+    if (!button) {
+        return;
+    }
+    const { blockCount, channelCount, blockIdCount } = getCacheSourceCounts();
+    let tooltip;
+    if (!blockCount) {
+        tooltip = "No cached blocks yet. Click to refresh cache.";
+    } else {
+        tooltip = `Randomly pick from ${formatCount(blockCount, "block")}, sources from ${formatCount(channelCount, "channel")} and ${formatCount(blockIdCount, "specific block", "specific blocks")}.\nClick to refresh cache.`;
+    }
+    button.title = tooltip;
+    button.setAttribute("aria-label", tooltip.replace(/\n/g, " "));
+}
+
 function createOverflowButton(nodes) {
     if (!Array.isArray(nodes) || !nodes.length) {
         return null;
@@ -1186,6 +1291,8 @@ function populateCard(article, block) {
 
     if (linkEl) {
         linkEl.href = `https://www.are.na/block/${block.id}`;
+        linkEl.textContent = `#${block.id}`;
+        linkEl.title = `Block ID ${block.id}, click to view on Are.na`;
     }
 }
 
@@ -1220,7 +1327,7 @@ function buildFallbackCard(block) {
     linkEl.className = "block-link";
     linkEl.target = "_blank";
     linkEl.rel = "noopener";
-    linkEl.textContent = "View on Are.na";
+    linkEl.textContent = "#block";
     metaRow.appendChild(linkEl);
 
     const typeEl = document.createElement("span");
@@ -1304,6 +1411,10 @@ function formatLinkLabel(url) {
 
 function updateCacheStatus() {
     const label = elements.cacheLabel;
+    const button = elements.cacheButton;
+    if (button) {
+        button.disabled = state.cacheMeta?.state === CACHE_STATE.working;
+    }
     if (!label) {
         return;
     }
@@ -1312,7 +1423,7 @@ function updateCacheStatus() {
 
     switch (status) {
         case CACHE_STATE.working:
-            label.textContent = "Refreshing cache";
+            label.textContent = "Refreshing...";
             break;
         case CACHE_STATE.error:
             label.textContent = state.cacheMeta.lastError || "Cache error";
@@ -1329,6 +1440,7 @@ function updateCacheStatus() {
             }
         }
     }
+    updateCacheSummaryTooltip();
 }
 
 function handleStorageChange(changes, area) {
