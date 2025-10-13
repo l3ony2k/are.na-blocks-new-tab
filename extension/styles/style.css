@@ -320,6 +320,7 @@ body ::-moz-selection {
     cursor: pointer;
     transition: background-color 0.2s ease;
     text-decoration: none;
+    line-height: inherit;
 }
 
 .button:hover,
@@ -550,6 +551,8 @@ form.settings-form {
     max-width: 880px;
     margin: 40px auto 60px;
     padding: 0 20px 80px;
+    font-size: 1rem;
+    line-height: 1.6;
 }
 
 form.settings-form fieldset {
@@ -567,39 +570,55 @@ form.settings-form legend {
 }
 
 .settings-about {
-    border: 1px solid var(--block-border);
-    background-color: var(--block-bg);
-    padding: 18px;
     display: flex;
     flex-direction: column;
     gap: 12px;
 }
 
-.settings-about h2 {
-    margin: 0;
-    font-size: 1.2rem;
+.settings-about legend {
+    font-size: 1.1rem;
+    font-weight: 600;
 }
 
 .settings-about h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.settings-about h4 {
     margin: 12px 0 4px;
     font-size: 1rem;
+    font-weight: 600;
 }
 
 .settings-about p {
     margin: 0;
-    line-height: 1.5;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.settings-about a {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.settings-about code {
+    font-size: 0.9rem;
+    background: var(--button-bg);
+    padding: 0.125rem 0.3rem;
 }
 
 label.setting-label {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-size: 0.95rem;
+    font-size: 1rem;
 }
 
 p.setting-label {
     margin: 12px 0 4px;
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 600;
 }
 
@@ -615,7 +634,7 @@ input[type="text"],
 input[type="number"],
 select {
     font-family: inherit;
-    font-size: 0.95rem;
+    font-size: 1rem;
     padding: 6px 8px;
     border: 1px solid var(--block-border);
     background-color: var(--block-bg);
@@ -680,7 +699,7 @@ textarea {
 
 .notice {
     color: var(--meta-color);
-    font-size: 0.85rem;
+    font-size: 0.95rem;
 }
 
 /* --- Utility --------------------------------------------------------------- */
