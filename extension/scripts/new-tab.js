@@ -821,7 +821,7 @@ function updateCacheSummaryTooltip() {
     if (!blockCount) {
         tooltip = "No cached blocks yet. Click to refresh cache.";
     } else {
-        tooltip = `Randomly pick from ${formatCount(blockCount, "block")}, sources from ${formatCount(channelCount, "channel")} and ${formatCount(blockIdCount, "specific block", "specific blocks")}.\nClick to refresh cache.`;
+        tooltip = `Randomly picked from ${formatCount(blockCount, "block")}, sourced from ${formatCount(channelCount, "channel")} and ${formatCount(blockIdCount, "specific block", "specific blocks")}.\nClick to refresh cache.`;
     }
     button.title = tooltip;
     button.setAttribute("aria-label", tooltip.replace(/\n/g, " "));
