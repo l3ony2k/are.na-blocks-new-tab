@@ -1464,7 +1464,9 @@ function handleStorageChange(changes, area) {
         getCache().then(({ cache, meta }) => {
             state.cache = cache;
             state.cacheMeta = { ...state.cacheMeta, ...meta };
-            renderBlocks();
+            if (!state.currentBlocks.length) {
+                renderBlocks();
+            }
             updateCacheStatus();
         });
     }
