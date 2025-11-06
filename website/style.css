@@ -959,6 +959,10 @@ textarea {
 
 .browser-content #content-area {
     padding: 24px;
+    background-color: var(--bg-color);
+    background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-attachment: local;
 }
 
 @media (max-width: 960px) {
@@ -973,6 +977,16 @@ textarea {
 
     .hero-cta {
         width: 100%;
+    }
+
+    .browser-content {
+        aspect-ratio: 16 / 10;
+    }
+}
+
+@media (max-width: 720px) {
+    .browser-content {
+        aspect-ratio: 4 / 3;
     }
 }
 

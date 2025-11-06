@@ -1,3 +1,5 @@
+![are.na blocks new tab hero](image/Marquee%20promo%20tile.png)
+
 # are.na blocks new tab
 
 ## Overview
@@ -20,3 +22,11 @@ This extension replaces the browser’s default new tab with a grid of random Ar
 - **Display:** Adjust the number of blocks, tile size preset, theme, and whether the header or footer is visible. Click **Save display settings** to apply without triggering a cache refresh.
 - **Global actions:** Use **Reset to defaults** to load the out-of-box configuration into the form (Image/Text filters, default channels, one block, auto sizing). Choose **Open new tab preview** to view the layout in a separate tab while tweaking options.
 
+## Screenshots
+
+| light | dark |
+| --- | --- |
+| ![Block layout sample w1](image/small/w1.png) | ![Block layout sample b2](image/small/b2.png) |
+| ![Block layout sample w3](image/small/w3.png) | ![Block layout sample b4](image/small/b4.png) |
+| ![Block layout sample w5](image/small/w5.png) | ![Block layout sample b6](image/small/b6.png) |
+| ![Block layout sample ws](image/small/ws.png) | ![Block layout sample bs](image/small/bs.png) |
