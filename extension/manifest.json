@@ -3,7 +3,7 @@
   "name": "are.na blocks new tab",
   "short_name": "abnt",
   "description": "Replace the new tab page with curated Are.na blocks using your favorite channels and custom settings.",
-    "version": "0.1.11",
+  "version": "0.1.12",
   "chrome_url_overrides": {
     "newtab": "pages/new-tab.html"
   },
@@ -11,13 +11,8 @@
     "page": "pages/settings.html",
     "open_in_tab": true
   },
-  "permissions": [
-    "storage",
-    "bookmarks"
-  ],
-  "host_permissions": [
-    "https://api.are.na/*"
-  ],
+  "permissions": ["storage", "bookmarks", "favicon"],
+  "host_permissions": ["https://api.are.na/*"],
   "background": {
     "service_worker": "scripts/background.js",
     "type": "module"
