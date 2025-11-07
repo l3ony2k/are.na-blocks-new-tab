@@ -28,7 +28,12 @@
         <meta name="twitter:image" content="/og.png" />
     </head>
     <body data-page="new-tab" class="landing-page">
-        <main class="site-main">
+        <div class="site-shell">
+            <header class="site-bar site-header" aria-label="Site header">
+                <span class="site-brand" aria-label="are.na blocks new tab brand">abnt</span>
+                <button class="button theme-toggle" id="theme-toggle" type="button" data-mode="system" aria-live="polite">System</button>
+            </header>
+            <main class="site-main">
             <section class="hero" aria-labelledby="hero-title">
                 <div class="hero-columns">
                     <div class="hero-text">
@@ -172,5 +177,67 @@
                 </div>
             </section>
         </main>
+            <footer class="site-bar site-footer" aria-label="Site footer">
+                <a class="button" href="https://www.are.na" target="_blank" rel="noopener">About are.na</a>
+                <a class="button" href="https://leonw.ong" target="_blank" rel="noopener">About me</a>
+            </footer>
+        </div>
+        <script>
+            (() => {
+                const themeButton = document.getElementById("theme-toggle");
+                if (!themeButton) {
+                    return;
+                }
+
+                const storageKey = "abnt-theme";
+                const modes = ["system", "light", "dark"];
+                let currentMode = restorePreference();
+                applyMode(currentMode);
+
+                themeButton.addEventListener("click", () => {
+                    const currentIndex = modes.indexOf(currentMode);
+                    const nextMode = modes[(currentIndex + 1) % modes.length];
+                    applyMode(nextMode);
+                });
+
+                function restorePreference() {
+                    try {
+                        const stored = localStorage.getItem(storageKey);
+                        if (stored && modes.includes(stored)) {
+                            return stored;
+                        }
+                    } catch {
+                        /* ignore storage access issues */
+                    }
+                    return "system";
+                }
+
+                function applyMode(mode) {
+                    currentMode = mode;
+                    document.documentElement.classList.remove("theme-light", "theme-dark");
+
+                    if (mode === "light") {
+                        document.documentElement.classList.add("theme-light");
+                    } else if (mode === "dark") {
+                        document.documentElement.classList.add("theme-dark");
+                    }
+
+                    try {
+                        if (mode === "system") {
+                            localStorage.removeItem(storageKey);
+                        } else {
+                            localStorage.setItem(storageKey, mode);
+                        }
+                    } catch {
+                        /* ignore storage access issues */
+                    }
+
+                    themeButton.dataset.mode = mode;
+                    const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+                    themeButton.textContent = `${modeLabel}`;
+                    themeButton.setAttribute("aria-label", `Cycle theme preference (current: ${modeLabel})`);
+                }
+            })();
+        </script>
     </body>
 </html>

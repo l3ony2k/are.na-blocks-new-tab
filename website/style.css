@@ -120,6 +120,46 @@ body ::-moz-selection {
     display: none;
 }
 
+.site-bar {
+    height: 35px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--header-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 12px;
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.site-footer {
+    margin-top: auto;
+    border-bottom: none;
+    border-top: 1px solid var(--header-border);
+}
+
+.site-footer .button:last-child {
+    margin-left: auto;
+}
+
+.site-brand {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.85rem;
+}
+
+.theme-toggle {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
 #bookmark-strip {
     flex: 1;
     display: flex;
@@ -756,7 +796,8 @@ textarea {
 
 @media (max-width: 720px) {
     #header-bar,
-    #footer-bar {
+    #footer-bar,
+    .site-bar {
         padding: 5px 8px;
     }
 
@@ -790,10 +831,54 @@ textarea {
 }
 
 /* --- Landing Page --------------------------------------------------------- */
-.site-main {
+.landing-page {
+    height: 100%;
     min-height: 100vh;
+    overflow: hidden;
+}
+
+.landing-page .site-shell {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+}
+
+.landing-page .site-header,
+.landing-page .site-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+}
+
+.landing-page .site-header {
+    top: 0;
+    z-index: 10;
+}
+
+.landing-page .site-footer {
+    bottom: 0;
+    border-bottom: none;
+    border-top: 1px solid var(--header-border);
+    z-index: 10;
+    margin: 0;
+}
+
+.landing-page .site-main {
+    position: absolute;
+    top: 35px;
+    bottom: 35px;
+    left: 0;
+    right: 0;
     display: flex;
     flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
 }
 
 .hero {
