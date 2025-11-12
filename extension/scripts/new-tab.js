@@ -57,83 +57,66 @@ let resizeTimer = null;
 const openBookmarkFolders = new Set();
 let cacheRefreshPromise = null;
 
-function setMenuLayerActive(isActive) {
+const setMenuLayerActive = (isActive) => {
   const layer = elements.bookmarkMenuLayer;
-  if (!layer) {
-    return;
-  }
+  if (!layer) return;
+  
   layer.setAttribute("aria-hidden", isActive ? "false" : "true");
   layer.style.pointerEvents = isActive ? "auto" : "none";
-}
+};
 
-function positionRootMenu(menu, trigger) {
-  if (!menu || !trigger) {
-    return;
+const calculateMenuPosition = (triggerRect, menuSize, viewport, offset = 0, isSubMenu = false) => {
+  const { width: menuWidth, height: menuHeight } = menuSize;
+  const { width: viewportWidth, height: viewportHeight } = viewport;
+  
+  let left, top;
+  
+  if (isSubMenu) {
+    left = triggerRect.right + offset;
+    if (left + menuWidth + 8 > viewportWidth) {
+      left = triggerRect.left - menuWidth - offset;
+    }
+    top = triggerRect.top;
+    if (top + menuHeight + 8 > viewportHeight) {
+      top = viewportHeight - menuHeight - 8;
+    }
+  } else {
+    left = triggerRect.left;
+    top = triggerRect.bottom + offset;
   }
-  const rect = trigger.getBoundingClientRect();
+  
+  return {
+    left: Math.min(Math.max(8, left), Math.max(8, viewportWidth - menuWidth - 8)),
+    top: Math.min(Math.max(8, top), Math.max(8, viewportHeight - menuHeight - 8)),
+    maxWidth: Math.max(8, viewportWidth - 16),
+    maxHeight: Math.max(8, viewportHeight - 16)
+  };
+};
+
+const positionMenu = (menu, trigger, offset = BOOKMARK_MENU_OFFSET, isSubMenu = false) => {
+  if (!menu || !trigger) return;
+  
   menu.style.maxHeight = "";
   menu.style.overflowY = "visible";
   menu.style.width = "auto";
 
-  const menuWidth = menu.offsetWidth || 0;
-  const menuHeight = menu.offsetHeight || 0;
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const maxWidth = Math.max(8, viewportWidth - 16);
-  const maxHeight = Math.max(8, viewportHeight - 16);
+  const position = calculateMenuPosition(
+    trigger.getBoundingClientRect(),
+    { width: menu.offsetWidth || 0, height: menu.offsetHeight || 0 },
+    { width: window.innerWidth, height: window.innerHeight },
+    offset,
+    isSubMenu
+  );
 
-  const desiredLeft = rect.left;
-  const desiredTop = rect.bottom + BOOKMARK_MENU_OFFSET;
-
-  const clampedLeft = Math.min(Math.max(8, desiredLeft), Math.max(8, viewportWidth - menuWidth - 8));
-  const clampedTop = Math.min(Math.max(8, desiredTop), Math.max(8, viewportHeight - menuHeight - 8));
-
-  menu.style.left = `${Math.round(clampedLeft)}px`;
-  menu.style.top = `${Math.round(clampedTop)}px`;
-
-  menu.style.maxHeight = `${maxHeight}px`;
+  menu.style.left = `${Math.round(position.left)}px`;
+  menu.style.top = `${Math.round(position.top)}px`;
+  menu.style.maxHeight = `${position.maxHeight}px`;
   menu.style.overflowY = "auto";
-  const targetWidth = Math.min(menuWidth || 200, maxWidth);
-  menu.style.width = `${targetWidth}px`;
-}
+  menu.style.width = `${Math.min(menu.offsetWidth || 200, position.maxWidth)}px`;
+};
 
-function positionSubMenu(menu, trigger) {
-  if (!menu || !trigger) {
-    return;
-  }
-  menu.style.maxHeight = "";
-  menu.style.overflowY = "visible";
-  menu.style.width = "auto";
-
-  const rect = trigger.getBoundingClientRect();
-  const menuWidth = menu.offsetWidth || 0;
-  const menuHeight = menu.offsetHeight || 0;
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const maxWidth = Math.max(8, viewportWidth - 16);
-  const maxHeight = Math.max(8, viewportHeight - 16);
-
-  let desiredLeft = rect.right + BOOKMARK_SUBMENU_OFFSET;
-  if (desiredLeft + menuWidth + 8 > viewportWidth) {
-    desiredLeft = rect.left - menuWidth - BOOKMARK_SUBMENU_OFFSET;
-  }
-
-  const clampedLeft = Math.min(Math.max(8, desiredLeft), Math.max(8, viewportWidth - menuWidth - 8));
-
-  let desiredTop = rect.top;
-  if (desiredTop + menuHeight + 8 > viewportHeight) {
-    desiredTop = viewportHeight - menuHeight - 8;
-  }
-  const clampedTop = Math.min(Math.max(8, desiredTop), Math.max(8, viewportHeight - menuHeight - 8));
-
-  menu.style.left = `${Math.round(clampedLeft)}px`;
-  menu.style.top = `${Math.round(clampedTop)}px`;
-
-  const targetWidth = Math.min(menuWidth || 200, maxWidth);
-  menu.style.width = `${targetWidth}px`;
-  menu.style.maxHeight = `${maxHeight}px`;
-  menu.style.overflowY = "auto";
-}
+const positionRootMenu = (menu, trigger) => positionMenu(menu, trigger, BOOKMARK_MENU_OFFSET, false);
+const positionSubMenu = (menu, trigger) => positionMenu(menu, trigger, BOOKMARK_SUBMENU_OFFSET, true);
 
 function repositionOpenMenus() {
   if (!elements.bookmarkMenuLayer || !openBookmarkFolders.size) {
@@ -412,7 +395,79 @@ function createBookmarkLink(node, className = "bookmark-link") {
   return link;
 }
 
-function createBookmarkFolder(node) {
+const createBookmarkController = (container, trigger, menu, level = 0) => {
+  const menuLayer = elements.bookmarkMenuLayer;
+  let isOpen = false;
+  
+  const focusFirstItem = () => menu.querySelector("a, button")?.focus();
+  
+  const close = () => {
+    if (!isOpen) return;
+    closeBookmarkMenusFromLevel(level + 1);
+    trigger.setAttribute("aria-expanded", "false");
+    container.classList.remove("is-open");
+    menu.hidden = true;
+    menu.setAttribute("hidden", "");
+    menu.setAttribute("aria-hidden", "true");
+    isOpen = false;
+    openBookmarkFolders.delete(controller);
+    if (!openBookmarkFolders.size) setMenuLayerActive(false);
+  };
+  
+  const position = () => positionRootMenu(menu, trigger);
+  
+  const open = (focusFirst = false) => {
+    if (isOpen) {
+      position();
+      if (focusFirst) focusFirstItem();
+      return;
+    }
+    closeAllBookmarkFolders(controller);
+    container.classList.add("is-open");
+    trigger.setAttribute("aria-expanded", "true");
+    menu.hidden = false;
+    menu.removeAttribute("hidden");
+    menu.setAttribute("aria-hidden", "false");
+    menu.scrollTop = 0;
+    isOpen = true;
+    openBookmarkFolders.add(controller);
+    if (menuLayer) {
+      setMenuLayerActive(true);
+      menuLayer.appendChild(menu);
+      menu.style.zIndex = "30";
+    }
+    position();
+    if (focusFirst) focusFirstItem();
+  };
+  
+  const destroy = () => {
+    close();
+    menu.parentElement?.removeChild(menu);
+  };
+  
+  const controller = { trigger, menu, level, isOpen: () => isOpen, position, open, close, destroy };
+  
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isOpen ? close() : open();
+  });
+  
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      open(true);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      trigger.focus();
+    }
+  });
+  
+  return controller;
+};
+
+const createBookmarkFolder = (node) => {
   const container = document.createElement("div");
   container.className = "bookmark-folder";
   container.dataset.bookmarkItem = "true";
@@ -450,96 +505,9 @@ function createBookmarkFolder(node) {
     container.appendChild(menu);
   }
 
-  const controller = {
-    trigger,
-    menu,
-    level: 0,
-    isOpen: false,
-    position() {
-      positionRootMenu(menu, trigger);
-    },
-    close() {
-      if (!controller.isOpen) {
-        return;
-      }
-      closeBookmarkMenusFromLevel(controller.level + 1);
-      trigger.setAttribute("aria-expanded", "false");
-      container.classList.remove("is-open");
-      menu.hidden = true;
-      menu.setAttribute("hidden", "");
-      menu.setAttribute("aria-hidden", "true");
-      controller.isOpen = false;
-      openBookmarkFolders.delete(controller);
-      if (!openBookmarkFolders.size) {
-        setMenuLayerActive(false);
-      }
-    },
-    destroy() {
-      controller.close();
-      if (menu?.parentElement) {
-        menu.parentElement.removeChild(menu);
-      }
-    },
-  };
-
-  container.__bookmarkController = controller;
-
-  function focusFirstItem() {
-    const firstItem = menu.querySelector("a, button");
-    firstItem?.focus();
-  }
-
-  controller.open = (focusFirst = false) => {
-    if (controller.isOpen) {
-      controller.position();
-      if (focusFirst) {
-        focusFirstItem();
-      }
-      return;
-    }
-    closeAllBookmarkFolders(controller);
-    container.classList.add("is-open");
-    trigger.setAttribute("aria-expanded", "true");
-    menu.hidden = false;
-    menu.removeAttribute("hidden");
-    menu.setAttribute("aria-hidden", "false");
-    menu.scrollTop = 0;
-    controller.isOpen = true;
-    openBookmarkFolders.add(controller);
-    if (menuLayer) {
-      setMenuLayerActive(true);
-      menuLayer.appendChild(menu);
-      menu.style.zIndex = "30";
-    }
-    controller.position();
-    if (focusFirst) {
-      focusFirstItem();
-    }
-  };
-
-  trigger.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (controller.isOpen) {
-      controller.close();
-    } else {
-      controller.open();
-    }
-  });
-
-  trigger.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      controller.open(true);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      controller.close();
-      trigger.focus();
-    }
-  });
-
+  container.__bookmarkController = createBookmarkController(container, trigger, menu, 0);
   return container;
-}
+};
 
 function buildBookmarkMenu(nodes, level = 0) {
   const menu = document.createElement("ul");
@@ -579,7 +547,76 @@ function createBookmarkMenuLink(node) {
   return item;
 }
 
-function createBookmarkMenuFolder(node, level) {
+const createBookmarkMenuController = (item, button, submenu, level) => {
+  const menuLayer = elements.bookmarkMenuLayer;
+  let isOpen = false;
+  
+  const focusFirstItem = () => submenu.querySelector("a, button")?.focus();
+  
+  const close = () => {
+    if (!isOpen) return;
+    item.classList.remove("submenu-open");
+    button.setAttribute("aria-expanded", "false");
+    submenu.hidden = true;
+    submenu.setAttribute("hidden", "");
+    submenu.setAttribute("aria-hidden", "true");
+    isOpen = false;
+    closeBookmarkMenusFromLevel(level + 1);
+    openBookmarkFolders.delete(controller);
+    if (!openBookmarkFolders.size) setMenuLayerActive(false);
+  };
+  
+  const position = () => positionSubMenu(submenu, button);
+  
+  const open = (focusFirst = false) => {
+    if (isOpen) {
+      position();
+      if (focusFirst) focusFirstItem();
+      return;
+    }
+    closeBookmarkMenusFromLevel(level, controller);
+    item.classList.add("submenu-open");
+    button.setAttribute("aria-expanded", "true");
+    submenu.hidden = false;
+    submenu.removeAttribute("hidden");
+    submenu.setAttribute("aria-hidden", "false");
+    submenu.scrollTop = 0;
+    isOpen = true;
+    openBookmarkFolders.add(controller);
+    if (menuLayer) {
+      menuLayer.appendChild(submenu);
+      submenu.style.zIndex = String(30 + level);
+    }
+    position();
+    if (focusFirst) focusFirstItem();
+  };
+  
+  const controller = { trigger: button, menu: submenu, level, isOpen: () => isOpen, position, open, close };
+  
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isOpen ? close() : open(true);
+  });
+  
+  button.addEventListener("pointerenter", () => open());
+  button.addEventListener("focus", () => open());
+  
+  button.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      open(true);
+    } else if (event.key === "ArrowLeft" || event.key === "Escape") {
+      event.preventDefault();
+      close();
+      button.focus();
+    }
+  });
+  
+  return controller;
+};
+
+const createBookmarkMenuFolder = (node, level) => {
   const item = document.createElement("li");
   item.className = "bookmark-menu-item has-children";
 
@@ -588,6 +625,7 @@ function createBookmarkMenuFolder(node, level) {
   button.className = "bookmark-menu-button";
   button.setAttribute("aria-haspopup", "true");
   button.setAttribute("aria-expanded", "false");
+  
   const label = document.createElement("span");
   label.textContent = node.title || "Folder";
   const arrow = document.createElement("span");
@@ -596,9 +634,8 @@ function createBookmarkMenuFolder(node, level) {
   button.append(label, arrow);
 
   const submenu = buildBookmarkMenu(node.children || [], level);
-  if (!submenu.childElementCount) {
-    return null;
-  }
+  if (!submenu.childElementCount) return null;
+  
   submenu.hidden = true;
   submenu.setAttribute("hidden", "");
   submenu.setAttribute("aria-hidden", "true");
@@ -614,96 +651,10 @@ function createBookmarkMenuFolder(node, level) {
     item.appendChild(submenu);
   }
 
-  function focusFirstItem() {
-    const firstItem = submenu.querySelector("a, button");
-    firstItem?.focus();
-  }
-
-  const controller = {
-    trigger: button,
-    menu: submenu,
-    level,
-    isOpen: false,
-    position() {
-      positionSubMenu(submenu, button);
-    },
-    close() {
-      if (!controller.isOpen) {
-        return;
-      }
-      item.classList.remove("submenu-open");
-      button.setAttribute("aria-expanded", "false");
-      submenu.hidden = true;
-      submenu.setAttribute("hidden", "");
-      submenu.setAttribute("aria-hidden", "true");
-      controller.isOpen = false;
-      closeBookmarkMenusFromLevel(controller.level + 1);
-      openBookmarkFolders.delete(controller);
-      if (!openBookmarkFolders.size) {
-        setMenuLayerActive(false);
-      }
-    },
-  };
-
-  controller.open = (focusFirst = false) => {
-    if (controller.isOpen) {
-      controller.position();
-      if (focusFirst) {
-        focusFirstItem();
-      }
-      return;
-    }
-    closeBookmarkMenusFromLevel(level, controller);
-    item.classList.add("submenu-open");
-    button.setAttribute("aria-expanded", "true");
-    submenu.hidden = false;
-    submenu.removeAttribute("hidden");
-    submenu.setAttribute("aria-hidden", "false");
-    submenu.scrollTop = 0;
-    controller.isOpen = true;
-    openBookmarkFolders.add(controller);
-    if (menuLayer) {
-      menuLayer.appendChild(submenu);
-      submenu.style.zIndex = String(30 + level);
-    }
-    controller.position();
-    if (focusFirst) {
-      focusFirstItem();
-    }
-  };
-
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (controller.isOpen) {
-      controller.close();
-    } else {
-      controller.open(true);
-    }
-  });
-
-  button.addEventListener("pointerenter", () => {
-    controller.open();
-  });
-
-  button.addEventListener("focus", () => {
-    controller.open();
-  });
-
-  button.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      controller.open(true);
-    } else if (event.key === "ArrowLeft" || event.key === "Escape") {
-      event.preventDefault();
-      controller.close();
-      button.focus();
-    }
-  });
-
+  item.__bookmarkController = createBookmarkMenuController(item, button, submenu, level);
   item.appendChild(button);
   return item;
-}
+};
 
 function cleanupBookmarkElement(element) {
   if (!element) {

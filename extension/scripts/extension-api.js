@@ -10,23 +10,21 @@ function promisify(namespace, methodName) {
     if (typeof method !== "function") {
         throw new Error(`Missing method ${methodName}`);
     }
-    if (isBrowserStyle) {
-        return (...args) => method.apply(namespace, args);
-    }
-    return (...args) => new Promise((resolve, reject) => {
-        try {
-            method.call(namespace, ...args, (result) => {
-                const error = api.runtime && api.runtime.lastError;
-                if (error) {
-                    reject(new Error(error.message));
-                } else {
-                    resolve(result);
-                }
-            });
-        } catch (err) {
-            reject(err);
-        }
-    });
+    
+    const handleCallback = (resolve, reject) => (result) => {
+        const error = api.runtime?.lastError;
+        return error ? reject(new Error(error.message)) : resolve(result);
+    };
+    
+    return isBrowserStyle
+        ? (...args) => method.apply(namespace, args)
+        : (...args) => new Promise((resolve, reject) => {
+            try {
+                method.call(namespace, ...args, handleCallback(resolve, reject));
+            } catch (err) {
+                reject(err);
+            }
+        });
 }
 
 export const extensionApi = api;

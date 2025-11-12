@@ -117,34 +117,33 @@ function wireEvents() {
     }
 }
 
-function gatherSourceSettings() {
-    const channelSlugs = parseChannelSlugs(elements.channelSlugs?.value || "");
-    const blockIds = parseBlockIds(elements.blockIds?.value || "");
-    let filters = Array.from(document.querySelectorAll("input[name='filters']:checked"), (input) => input.value);
-    if (!filters.length) {
-        filters = [...BLOCK_TYPES];
-    }
-    return { channelSlugs, blockIds, filters };
-}
-
-function gatherDisplaySettings() {
-    let blockCount = Number(elements.blockCount?.value || DEFAULT_SETTINGS.blockCount);
-    blockCount = Math.min(6, Math.max(1, blockCount));
-    const showHeader = Boolean(elements.showHeader?.checked);
-    const showFooter = Boolean(elements.showFooter?.checked);
-    const tileIndex = Number(elements.tileSize?.value || 0);
-    const tileSize = TILE_SIZE_OPTIONS[tileIndex] || DEFAULT_SETTINGS.tileSize;
-    const themeRadio = document.querySelector("input[name='theme']:checked");
-    const theme = themeRadio ? themeRadio.value : DEFAULT_SETTINGS.theme;
-    return { blockCount, showHeader, showFooter, tileSize, theme };
-}
-
-function gatherFormSettings() {
+const gatherSourceSettings = () => {
+    const filters = Array.from(document.querySelectorAll("input[name='filters']:checked"), input => input.value);
     return {
-        ...gatherSourceSettings(),
-        ...gatherDisplaySettings()
+        channelSlugs: parseChannelSlugs(elements.channelSlugs?.value || ""),
+        blockIds: parseBlockIds(elements.blockIds?.value || ""),
+        filters: filters.length ? filters : [...BLOCK_TYPES]
     };
-}
+};
+
+const gatherDisplaySettings = () => {
+    const blockCount = Math.min(6, Math.max(1, Number(elements.blockCount?.value || DEFAULT_SETTINGS.blockCount)));
+    const tileIndex = Number(elements.tileSize?.value || 0);
+    const themeRadio = document.querySelector("input[name='theme']:checked");
+    
+    return {
+        blockCount,
+        showHeader: Boolean(elements.showHeader?.checked),
+        showFooter: Boolean(elements.showFooter?.checked),
+        tileSize: TILE_SIZE_OPTIONS[tileIndex] || DEFAULT_SETTINGS.tileSize,
+        theme: themeRadio?.value || DEFAULT_SETTINGS.theme
+    };
+};
+
+const gatherFormSettings = () => ({
+    ...gatherSourceSettings(),
+    ...gatherDisplaySettings()
+});
 
 async function handleDisplaySave(event) {
     event.preventDefault();
