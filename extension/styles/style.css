@@ -329,6 +329,13 @@ body ::-moz-selection {
     outline: none;
 }
 
+.bookmark-link,
+.bookmark-folder,
+.bookmark-trigger,
+.button {
+    height: 24px;
+}
+
 /* --- Main Content ---------------------------------------------------------- */
 #content-area {
     flex: 1;
@@ -383,6 +390,7 @@ body[data-page="settings"] #blocks-container {
 #blocks-container.is-empty .block-empty {
     max-width: 320px;
 }
+
 .block-row {
     display: flex;
     gap: var(--tile-gap);
@@ -803,4 +811,3 @@ textarea {
     }
 
 }
-
