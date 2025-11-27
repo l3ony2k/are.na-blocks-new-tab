@@ -60,7 +60,7 @@ let cacheRefreshPromise = null;
 const setMenuLayerActive = (isActive) => {
   const layer = elements.bookmarkMenuLayer;
   if (!layer) return;
-  
+
   layer.setAttribute("aria-hidden", isActive ? "false" : "true");
   layer.style.pointerEvents = isActive ? "auto" : "none";
 };
@@ -68,9 +68,9 @@ const setMenuLayerActive = (isActive) => {
 const calculateMenuPosition = (triggerRect, menuSize, viewport, offset = 0, isSubMenu = false) => {
   const { width: menuWidth, height: menuHeight } = menuSize;
   const { width: viewportWidth, height: viewportHeight } = viewport;
-  
+
   let left, top;
-  
+
   if (isSubMenu) {
     left = triggerRect.right + offset;
     if (left + menuWidth + 8 > viewportWidth) {
@@ -84,7 +84,7 @@ const calculateMenuPosition = (triggerRect, menuSize, viewport, offset = 0, isSu
     left = triggerRect.left;
     top = triggerRect.bottom + offset;
   }
-  
+
   return {
     left: Math.min(Math.max(8, left), Math.max(8, viewportWidth - menuWidth - 8)),
     top: Math.min(Math.max(8, top), Math.max(8, viewportHeight - menuHeight - 8)),
@@ -95,7 +95,7 @@ const calculateMenuPosition = (triggerRect, menuSize, viewport, offset = 0, isSu
 
 const positionMenu = (menu, trigger, offset = BOOKMARK_MENU_OFFSET, isSubMenu = false) => {
   if (!menu || !trigger) return;
-  
+
   menu.style.maxHeight = "";
   menu.style.overflowY = "visible";
   menu.style.width = "auto";
@@ -398,9 +398,9 @@ function createBookmarkLink(node, className = "bookmark-link") {
 const createBookmarkController = (container, trigger, menu, level = 0) => {
   const menuLayer = elements.bookmarkMenuLayer;
   let isOpen = false;
-  
+
   const focusFirstItem = () => menu.querySelector("a, button")?.focus();
-  
+
   const close = () => {
     if (!isOpen) return;
     closeBookmarkMenusFromLevel(level + 1);
@@ -413,9 +413,9 @@ const createBookmarkController = (container, trigger, menu, level = 0) => {
     openBookmarkFolders.delete(controller);
     if (!openBookmarkFolders.size) setMenuLayerActive(false);
   };
-  
+
   const position = () => positionRootMenu(menu, trigger);
-  
+
   const open = (focusFirst = false) => {
     if (isOpen) {
       position();
@@ -439,20 +439,20 @@ const createBookmarkController = (container, trigger, menu, level = 0) => {
     position();
     if (focusFirst) focusFirstItem();
   };
-  
+
   const destroy = () => {
     close();
     menu.parentElement?.removeChild(menu);
   };
-  
+
   const controller = { trigger, menu, level, isOpen: () => isOpen, position, open, close, destroy };
-  
+
   trigger.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
     isOpen ? close() : open();
   });
-  
+
   trigger.addEventListener("keydown", (event) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -463,7 +463,7 @@ const createBookmarkController = (container, trigger, menu, level = 0) => {
       trigger.focus();
     }
   });
-  
+
   return controller;
 };
 
@@ -550,9 +550,9 @@ function createBookmarkMenuLink(node) {
 const createBookmarkMenuController = (item, button, submenu, level) => {
   const menuLayer = elements.bookmarkMenuLayer;
   let isOpen = false;
-  
+
   const focusFirstItem = () => submenu.querySelector("a, button")?.focus();
-  
+
   const close = () => {
     if (!isOpen) return;
     item.classList.remove("submenu-open");
@@ -565,9 +565,9 @@ const createBookmarkMenuController = (item, button, submenu, level) => {
     openBookmarkFolders.delete(controller);
     if (!openBookmarkFolders.size) setMenuLayerActive(false);
   };
-  
+
   const position = () => positionSubMenu(submenu, button);
-  
+
   const open = (focusFirst = false) => {
     if (isOpen) {
       position();
@@ -590,18 +590,18 @@ const createBookmarkMenuController = (item, button, submenu, level) => {
     position();
     if (focusFirst) focusFirstItem();
   };
-  
+
   const controller = { trigger: button, menu: submenu, level, isOpen: () => isOpen, position, open, close };
-  
+
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
     isOpen ? close() : open(true);
   });
-  
+
   button.addEventListener("pointerenter", () => open());
   button.addEventListener("focus", () => open());
-  
+
   button.addEventListener("keydown", (event) => {
     if (event.key === "ArrowRight") {
       event.preventDefault();
@@ -612,7 +612,7 @@ const createBookmarkMenuController = (item, button, submenu, level) => {
       button.focus();
     }
   });
-  
+
   return controller;
 };
 
@@ -625,7 +625,7 @@ const createBookmarkMenuFolder = (node, level) => {
   button.className = "bookmark-menu-button";
   button.setAttribute("aria-haspopup", "true");
   button.setAttribute("aria-expanded", "false");
-  
+
   const label = document.createElement("span");
   label.textContent = node.title || "Folder";
   const arrow = document.createElement("span");
@@ -635,7 +635,7 @@ const createBookmarkMenuFolder = (node, level) => {
 
   const submenu = buildBookmarkMenu(node.children || [], level);
   if (!submenu.childElementCount) return null;
-  
+
   submenu.hidden = true;
   submenu.setAttribute("hidden", "");
   submenu.setAttribute("aria-hidden", "true");
@@ -798,11 +798,22 @@ function updateCacheSummaryTooltip() {
     return;
   }
   const { blockCount, channelCount, blockIdCount } = getCacheSourceCounts();
+  const timestamp = state.cacheMeta.lastUpdated || state.cache?.fetchedAt;
+  const relativeTime = timestamp ? formatRelativeTime(timestamp) : null;
+
   let tooltip;
   if (!blockCount) {
-    tooltip = "No cached blocks yet. Click to refresh cache.";
+    tooltip = "No cached blocks yet.";
+    if (relativeTime) {
+      tooltip += `\nLast refresh: ${relativeTime}`;
+    }
+    tooltip += "\nClick to refresh cache.";
   } else {
-    tooltip = `Randomly picked from ${formatCount(blockCount, "block")}, sourced from ${formatCount(channelCount, "channel")} and ${formatCount(blockIdCount, "specific block", "specific blocks")}.\nClick to refresh cache.`;
+    tooltip = `Randomly picked from ${formatCount(blockCount, "block")}, sourced from ${formatCount(channelCount, "channel")} and ${formatCount(blockIdCount, "specific block", "specific blocks")}.`;
+    if (relativeTime) {
+      tooltip += `\nLast refresh: ${relativeTime}`;
+    }
+    tooltip += "\nClick to refresh cache.";
   }
   button.title = tooltip;
   button.setAttribute("aria-label", tooltip.replace(/\n/g, " "));
@@ -1380,6 +1391,32 @@ function formatLinkLabel(url) {
   }
 }
 
+function getCacheLedStatus() {
+  const status = state.cacheMeta?.state || CACHE_STATE.idle;
+  const timestamp = state.cacheMeta.lastUpdated || state.cache?.fetchedAt;
+
+  if (status === CACHE_STATE.error) {
+    return "error";
+  }
+
+  if (status === CACHE_STATE.working) {
+    return "working";
+  }
+
+  if (!timestamp) {
+    return "idle";
+  }
+
+  const age = Date.now() - timestamp;
+  const oneHour = 60 * 60 * 1000;
+
+  if (age < oneHour) {
+    return "fresh";
+  }
+
+  return "stale";
+}
+
 function updateCacheStatus() {
   const label = elements.cacheLabel;
   const button = elements.cacheButton;
@@ -1391,6 +1428,18 @@ function updateCacheStatus() {
   }
 
   const status = state.cacheMeta?.state || CACHE_STATE.idle;
+  const ledStatus = getCacheLedStatus();
+
+  // Update LED indicator
+  let ledSpan = button?.querySelector(".cache-led");
+  if (button && !ledSpan) {
+    ledSpan = document.createElement("span");
+    ledSpan.className = "cache-led";
+    button.insertBefore(ledSpan, label);
+  }
+  if (ledSpan) {
+    ledSpan.dataset.status = ledStatus;
+  }
 
   switch (status) {
     case CACHE_STATE.working:
@@ -1400,12 +1449,9 @@ function updateCacheStatus() {
       label.textContent = state.cacheMeta.lastError || "Cache error";
       break;
     default: {
-      const timestamp = state.cacheMeta.lastUpdated || state.cache?.fetchedAt;
       const blockCount = state.cacheMeta.blockCount ?? state.cache?.blockIds?.length ?? 0;
-      if (timestamp && blockCount) {
-        label.textContent = `${blockCount} block${blockCount === 1 ? "" : "s"} - ${formatRelativeTime(timestamp)}`;
-      } else if (timestamp) {
-        label.textContent = `Cached ${formatRelativeTime(timestamp)}`;
+      if (blockCount) {
+        label.textContent = `${blockCount} block${blockCount === 1 ? "" : "s"}`;
       } else {
         label.textContent = "Cache idle";
       }

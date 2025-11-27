@@ -718,96 +718,80 @@ textarea {
 .status-button {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    padding: 4px 12px;
-}
 
-.status-button[disabled] {
-    opacity: 0.6;
-    cursor: default;
-    pointer-events: none;
-}
-
-/* --- Scrollbar Styling ----------------------------------------------------- */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: var(--block-border) var(--bg-color);
-}
-
-*::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-*::-webkit-scrollbar-track {
-    background: var(--bg-color);
-}
-
-*::-webkit-scrollbar-thumb {
-    background: var(--block-border);
-}
-
-*::-webkit-scrollbar-thumb:hover {
-    background: var(--text-color);
-}
-
-@media (max-width: 720px) {
-
-    #header-bar,
-
-    #footer-bar {
-
-        padding: 5px 8px;
-
+    *::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
     }
 
-
-
-    #content-area {
-
-        padding: 16px;
-
-        overflow-y: auto;
-
+    *::-webkit-scrollbar-track {
+        background: var(--bg-color);
     }
 
-
-
-    #blocks-container {
-
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-
-        gap: 12px;
-
+    *::-webkit-scrollbar-thumb {
+        background: var(--block-border);
     }
 
-
-
-    .block-card {
-
-        padding: 10px;
-
+    *::-webkit-scrollbar-thumb:hover {
+        background: var(--text-color);
     }
 
+    @media (max-width: 720px) {
+
+        #header-bar,
+
+        #footer-bar {
+
+            padding: 5px 8px;
+
+        }
 
 
-    .block-main .text-tile {
 
-        padding: 16px;
+        #content-area {
 
-        font-size: 1.4rem;
+            padding: 16px;
+
+            overflow-y: auto;
+
+        }
+
+
+
+        #blocks-container {
+
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+
+            gap: 12px;
+
+        }
+
+
+
+        .block-card {
+
+            padding: 10px;
+
+        }
+
+
+
+        .block-main .text-tile {
+
+            padding: 16px;
+
+            font-size: 1.4rem;
+
+        }
+
+
+
+        .settings-actions {
+
+            flex-direction: column;
+
+            align-items: flex-start;
+
+        }
 
     }
-
-
-
-    .settings-actions {
-
-        flex-direction: column;
-
-        align-items: flex-start;
-
-    }
-
-}
