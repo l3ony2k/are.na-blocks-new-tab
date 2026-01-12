@@ -18,7 +18,11 @@ const safeUrl = (url) => {
 const fetchJson = async (path, signal) => {
     const response = await fetch(`${ARENA_API_ROOT}${path}`, { headers: JSON_HEADERS, signal });
     if (!response.ok) {
-        const message = await response.text().catch(() => "");
+        let message = await response.text().catch(() => "");
+        // Truncate to prevent huge HTML error pages from entering the error flow
+        if (message.length > 20) {
+            message = message.slice(0, 20) + "...";
+        }
         throw new Error(`Are.na request failed (${response.status}): ${message || response.statusText}`);
     }
     return response.json();
@@ -85,7 +89,7 @@ export const fetchChannelBlocks = async (slug, signal, onProgress) => {
             channelSlug: slug,
             channelTitle: data.title
         })));
-        
+
         if (typeof onProgress === "function") {
             onProgress({ slug, page, total: data.length || contents.length });
         }

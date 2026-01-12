@@ -26,6 +26,58 @@ const USER_AGENT = typeof navigator === "object" && typeof navigator.userAgent =
 const IS_FIREFOX = USER_AGENT.includes("firefox");
 const IS_CHROMIUM = !IS_FIREFOX && /chrome|chromium|crios|edg|opr|vivaldi/.test(USER_AGENT);
 
+/**
+ * Maps error messages to short, button-friendly labels.
+ * Prevents HTML or long text from overflowing the cache status button.
+ */
+const sanitizeErrorLabel = (message) => {
+  if (!message || typeof message !== "string") {
+    return "Error";
+  }
+
+  const lower = message.toLowerCase();
+
+  // Network/connection errors
+  if (lower.includes("networkerror") || lower.includes("network error") ||
+    lower.includes("failed to fetch") || lower.includes("dns") ||
+    lower.includes("net::") || lower.includes("offline")) {
+    return "Offline";
+  }
+
+  // Timeout/abort errors
+  if (lower.includes("timeout") || lower.includes("aborted") ||
+    lower.includes("abort") || lower.includes("timed out")) {
+    return "Timeout";
+  }
+
+  // HTTP status code errors
+  if (/\(401\)/.test(message) || /\(403\)/.test(message)) {
+    return "Auth error";
+  }
+  if (/\(404\)/.test(message) || lower.includes("not found")) {
+    return "Not found";
+  }
+  if (/\(429\)/.test(message) || lower.includes("rate limit")) {
+    return "Rate limited";
+  }
+  if (/\(5\d{2}\)/.test(message)) {
+    return "Server error";
+  }
+
+  // Already in progress
+  if (lower.includes("already in progress") || lower.includes("busy")) {
+    return "Busy";
+  }
+
+  // Fallback: strip HTML and truncate
+  const stripped = message.replace(/<[^>]*>/g, "").trim();
+  if (stripped.length > 20) {
+    return stripped.slice(0, 17) + "...";
+  }
+
+  return stripped || "Error";
+};
+
 const state = {
   settings: null,
   cache: null,
@@ -1446,7 +1498,7 @@ function updateCacheStatus() {
       label.textContent = "Refreshing...";
       break;
     case CACHE_STATE.error:
-      label.textContent = state.cacheMeta.lastError || "Cache error";
+      label.textContent = sanitizeErrorLabel(state.cacheMeta.lastError);
       break;
     default: {
       const blockCount = state.cacheMeta.blockCount ?? state.cache?.blockIds?.length ?? 0;
