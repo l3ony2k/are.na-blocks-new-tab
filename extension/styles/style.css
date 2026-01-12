@@ -364,6 +364,33 @@ body[data-page="settings"] #content-area {
     overflow-y: auto;
 }
 
+/* Settings header - sticky top bar */
+body[data-page="settings"] #header-bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    justify-content: space-between;
+}
+
+#unsaved-indicator {
+    font-size: 0.85rem;
+    color: #cc3333;
+    font-weight: 500;
+}
+
+/* Dirty state for save buttons */
+.button.is-dirty {
+    background-color: #cc3333;
+    border-color: #aa2222;
+    color: white;
+}
+
+.button.is-dirty:hover,
+.button.is-dirty:focus-visible {
+    background-color: #ee4444;
+    border-color: #cc3333;
+}
+
 body[data-page="new-tab"] #blocks-container {
     --tile-size: 260px;
     --tile-gap: 18px;
@@ -718,80 +745,53 @@ textarea {
 .status-button {
     display: inline-flex;
     align-items: center;
+}
 
-    *::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--block-border);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--text-color);
+}
+
+@media (max-width: 720px) {
+
+    #header-bar,
+    #footer-bar {
+        padding: 5px 8px;
     }
 
-    *::-webkit-scrollbar-track {
-        background: var(--bg-color);
+    #content-area {
+        padding: 16px;
+        overflow-y: auto;
     }
 
-    *::-webkit-scrollbar-thumb {
-        background: var(--block-border);
+    #blocks-container {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
     }
 
-    *::-webkit-scrollbar-thumb:hover {
-        background: var(--text-color);
+    .block-card {
+        padding: 10px;
     }
 
-    @media (max-width: 720px) {
-
-        #header-bar,
-
-        #footer-bar {
-
-            padding: 5px 8px;
-
-        }
-
-
-
-        #content-area {
-
-            padding: 16px;
-
-            overflow-y: auto;
-
-        }
-
-
-
-        #blocks-container {
-
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-
-            gap: 12px;
-
-        }
-
-
-
-        .block-card {
-
-            padding: 10px;
-
-        }
-
-
-
-        .block-main .text-tile {
-
-            padding: 16px;
-
-            font-size: 1.4rem;
-
-        }
-
-
-
-        .settings-actions {
-
-            flex-direction: column;
-
-            align-items: flex-start;
-
-        }
-
+    .block-main .text-tile {
+        padding: 16px;
+        font-size: 1.4rem;
     }
+
+    .settings-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

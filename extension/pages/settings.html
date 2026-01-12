@@ -9,8 +9,10 @@
 </head>
 <body data-page="settings">
     <div id="app-shell">
-        <header id="header-bar" hidden>
-            <span>ABNT settings</span>
+        <header id="header-bar">
+            <button class="button" id="back-button" type="button">← Back</button>
+            <span id="unsaved-indicator" class="hidden">You have unsaved changes</span>
+            <button class="button" id="save-all-button" type="button">Save All</button>
         </header>
         <main id="content-area">
             <form class="settings-form" id="settings-form">

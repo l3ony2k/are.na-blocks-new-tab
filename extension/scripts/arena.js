@@ -15,17 +15,70 @@ const safeUrl = (url) => {
     }
 };
 
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY = 1000; // 1 second, doubles each retry
+
+const isRetryableError = (status) => {
+    // Retry on server errors (5xx) and rate limiting (429)
+    return status >= 500 || status === 429;
+};
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const fetchJson = async (path, signal) => {
-    const response = await fetch(`${ARENA_API_ROOT}${path}`, { headers: JSON_HEADERS, signal });
-    if (!response.ok) {
-        let message = await response.text().catch(() => "");
-        // Truncate to prevent huge HTML error pages from entering the error flow
-        if (message.length > 20) {
-            message = message.slice(0, 20) + "...";
+    let lastError;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            const response = await fetch(`${ARENA_API_ROOT}${path}`, { headers: JSON_HEADERS, signal });
+
+            if (!response.ok) {
+                let message = await response.text().catch(() => "");
+                // Truncate to prevent huge HTML error pages
+                if (message.length > 20) {
+                    message = message.slice(0, 20) + "...";
+                }
+                const error = new Error(`Are.na request failed (${response.status}): ${message || response.statusText}`);
+                error.status = response.status;
+
+                // Only retry on transient server errors
+                if (isRetryableError(response.status) && attempt < MAX_RETRIES) {
+                    const waitTime = RETRY_BASE_DELAY * Math.pow(2, attempt);
+                    console.log(`Retry ${attempt + 1}/${MAX_RETRIES} after ${waitTime}ms...`);
+                    await delay(waitTime);
+                    continue;
+                }
+                throw error;
+            }
+
+            return response.json();
+        } catch (error) {
+            lastError = error;
+
+            // Check if it's an abort signal - don't retry
+            if (signal?.aborted || error.name === "AbortError") {
+                throw error;
+            }
+
+            // Retry on network errors (no status code = network failure)
+            const isNetworkError = !error.status && (
+                error.message?.includes("fetch") ||
+                error.message?.includes("network") ||
+                error.name === "TypeError"
+            );
+
+            if (isNetworkError && attempt < MAX_RETRIES) {
+                const waitTime = RETRY_BASE_DELAY * Math.pow(2, attempt);
+                console.log(`Network error, retry ${attempt + 1}/${MAX_RETRIES} after ${waitTime}ms...`);
+                await delay(waitTime);
+                continue;
+            }
+
+            throw error;
         }
-        throw new Error(`Are.na request failed (${response.status}): ${message || response.statusText}`);
     }
-    return response.json();
+
+    throw lastError;
 };
 
 const deriveTitle = (block) =>
