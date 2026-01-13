@@ -644,6 +644,57 @@ form.settings-form legend {
     padding: 0.125rem 0.3rem;
 }
 
+/* --- Changelog Section ----------------------------------------------------- */
+.settings-changelog {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-changelog legend {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.changelog-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.changelog-item {
+    display: grid;
+    grid-template-columns: 70px 90px 1fr;
+    gap: 12px;
+    align-items: baseline;
+    font-size: 0.9rem;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--block-border);
+}
+
+.changelog-item:last-child {
+    border-bottom: none;
+}
+
+.changelog-version {
+    font-weight: 600;
+    font-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", monospace;
+    color: var(--link-color);
+}
+
+.changelog-date {
+    color: var(--meta-color);
+    font-size: 0.85rem;
+    font-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", monospace;
+}
+
+.changelog-desc {
+    color: var(--text-color);
+}
+
 label.setting-label {
     display: flex;
     flex-direction: column;
