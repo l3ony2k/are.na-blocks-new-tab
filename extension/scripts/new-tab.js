@@ -4,7 +4,7 @@ import { bookmarks, runtime, storage } from "./extension-api.js";
 import { chooseRandomBlocks } from "./arena.js";
 import { getCache, getSettings } from "./storage.js";
 import { applyTheme } from "./theme.js";
-import { toPlainText } from "./sanitize.js";
+import { refreshCache } from "./cache-refresh.js";
 
 const TILE_SIZE_MAP = {
   xs: 225,
@@ -783,9 +783,6 @@ function handleCacheButtonClick(event) {
 }
 
 function triggerCacheRefresh(reason = "manual") {
-  if (!runtime?.sendMessage) {
-    return Promise.resolve(false);
-  }
   if (cacheRefreshPromise) {
     return cacheRefreshPromise;
   }
@@ -793,30 +790,58 @@ function triggerCacheRefresh(reason = "manual") {
   updateCacheStatus();
   cacheRefreshPromise = (async () => {
     try {
-      const response = await runtime.sendMessage({
-        type: MESSAGES.refreshCache,
-        payload: { reason },
-      });
-      if (response?.ok) {
-        const fetchedAt = response.summary?.fetchedAt || Date.now();
-        const blockCount = response.summary?.blockCount ?? state.cacheMeta.blockCount ?? 0;
-        state.cacheMeta = {
-          ...state.cacheMeta,
-          state: CACHE_STATE.idle,
-          lastError: null,
-          lastUpdated: fetchedAt,
-          blockCount,
-        };
-        updateCacheStatus();
-        return true;
+      let summary = null;
+
+      if (runtime?.sendMessage) {
+        const response = await runtime.sendMessage({
+          type: MESSAGES.refreshCache,
+          payload: { reason },
+        });
+
+        if (response?.ok) {
+          summary = response.summary || null;
+        } else if (response?.error) {
+          throw new Error(response.error);
+        } else {
+          throw new Error("Cache refresh did not return a result.");
+        }
+      } else {
+        summary = await refreshCache();
       }
-      if (response?.error) {
-        throw new Error(response.error);
-      }
-      state.cacheMeta = { ...state.cacheMeta, state: CACHE_STATE.idle };
+
+      const fetchedAt = summary?.fetchedAt || Date.now();
+      const blockCount = summary?.blockCount ?? state.cacheMeta.blockCount ?? 0;
+      state.cacheMeta = {
+        ...state.cacheMeta,
+        state: CACHE_STATE.idle,
+        lastError: null,
+        lastUpdated: fetchedAt,
+        blockCount,
+      };
       updateCacheStatus();
       return true;
     } catch (error) {
+      const message = error?.message || "";
+
+      if (/receiving end|message port closed|did not return a result/i.test(message)) {
+        try {
+          const summary = await refreshCache();
+          state.cacheMeta = {
+            ...state.cacheMeta,
+            state: CACHE_STATE.idle,
+            lastError: null,
+            lastUpdated: summary?.fetchedAt || Date.now(),
+            blockCount: summary?.blockCount ?? state.cacheMeta.blockCount ?? 0,
+          };
+          updateCacheStatus();
+          return true;
+        } catch (fallbackError) {
+          state.cacheMeta = { ...state.cacheMeta, state: CACHE_STATE.error, lastError: fallbackError.message };
+          updateCacheStatus();
+          return false;
+        }
+      }
+
       state.cacheMeta = { ...state.cacheMeta, state: CACHE_STATE.error, lastError: error.message };
       updateCacheStatus();
       return false;
@@ -1320,13 +1345,15 @@ function populateCard(article, block) {
   }
 
   if (typeEl) {
-    typeEl.textContent = block.type || "Block";
+    typeEl.textContent = block.kind || "Block";
   }
 
   if (linkEl) {
-    linkEl.href = `https://www.are.na/block/${block.id}`;
+    linkEl.href = block.arenaUrl || `https://www.are.na/block/${block.id}`;
     linkEl.textContent = `#${block.id}`;
-    linkEl.title = `Block ID ${block.id}, click to view on Are.na`;
+    linkEl.title = block.kind === "Channel"
+      ? `${block.title || "Channel"}, click to view on Are.na`
+      : `Block ID ${block.id}, click to view on Are.na`;
   }
 }
 
@@ -1377,49 +1404,63 @@ function buildFallbackCard(block) {
 
 function buildMainContent(container, block) {
   container.innerHTML = "";
-  const type = block.type;
+  const kind = block.kind;
 
-  if (type === "Image" && block.imageUrl) {
+  if (kind !== "Text" && block.imageUrl) {
     const img = document.createElement("img");
     img.src = block.imageUrl;
-    img.alt = block.descriptionText || block.title || "Are.na image";
+    img.alt = block.imageAlt || block.descriptionText || block.title || "Are.na preview";
     img.loading = "lazy";
     container.appendChild(img);
     return;
   }
 
-  if (type === "Text") {
+  if (kind === "Text") {
     const wrapper = document.createElement("div");
     wrapper.className = "text-tile";
     const content = document.createElement("span");
     content.className = "tile-text-content";
-    const raw = block.contentHtml || block.descriptionHtml;
-    const textContent = raw ? toPlainText(raw) : block.descriptionText || block.title || "Text";
+    const textContent = block.contentText || block.descriptionText || block.title || "Text";
     content.textContent = textContent.trim() || "Text";
     wrapper.appendChild(content);
     container.appendChild(wrapper);
     return;
   }
 
-  if (type === "Link" && block.linkUrl) {
+  if (kind === "Link" && block.linkUrl) {
     container.appendChild(createChip(formatLinkLabel(block.linkUrl)));
     return;
   }
 
-  if (type === "Attachment" && block.attachment?.url) {
+  if (kind === "Attachment" && block.attachment?.url) {
     const name = block.attachment.fileName || block.title || "Attachment";
     container.appendChild(createChip(name));
     return;
   }
 
-  if (type === "Embed") {
+  if (kind === "Embed") {
     const label = block.embed?.type || block.title || "Embed";
     container.appendChild(createChip(label));
     return;
   }
 
-  if (type === "Channel" && block.channel?.title) {
-    container.appendChild(createChip(block.channel.title));
+  if (kind === "Channel") {
+    if (block.counts?.contents) {
+      container.appendChild(createChip(formatCount(block.counts.contents, "item")));
+      return;
+    }
+    if (block.owner?.name) {
+      container.appendChild(createChip(block.owner.name));
+      return;
+    }
+    if (block.channel?.title) {
+      container.appendChild(createChip(block.channel.title));
+      return;
+    }
+  }
+
+  if (block.source?.provider?.name) {
+    container.appendChild(createChip(block.source.provider.name));
     return;
   }
 

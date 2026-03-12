@@ -1,9 +1,9 @@
-import { ARENA_API_ROOT, BLOCK_TYPES } from "./constants.js";
+import { BLOCK_TYPES } from "./constants.js";
+import { fetchArenaBlock, fetchArenaChannel, fetchArenaChannelContentsPage } from "./arena-client.js";
 import { sanitizeHtml, toPlainText } from "./sanitize.js";
 
 const PER_PAGE = 100;
 const MAX_PAGES = 10;
-const JSON_HEADERS = { Accept: "application/json" };
 
 const safeUrl = (url) => {
     if (!url) return null;
@@ -14,150 +14,238 @@ const safeUrl = (url) => {
         return null;
     }
 };
+const getRenderedHtml = (value) => sanitizeHtml(value?.html || "");
+const getRenderedPlainText = (value) => value?.plain || toPlainText(value?.html || "") || value?.markdown || "";
 
-const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY = 1000; // 1 second, doubles each retry
+const deriveTitle = (item) =>
+    item.title || item.source?.title || getRenderedPlainText(item.content) || getRenderedPlainText(item.description) || `${item.type || "Block"} ${item.id}`;
 
-const isRetryableError = (status) => {
-    // Retry on server errors (5xx) and rate limiting (429)
-    return status >= 500 || status === 429;
-};
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const fetchJson = async (path, signal) => {
-    let lastError;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            const response = await fetch(`${ARENA_API_ROOT}${path}`, { headers: JSON_HEADERS, signal });
-
-            if (!response.ok) {
-                let message = await response.text().catch(() => "");
-                // Truncate to prevent huge HTML error pages
-                if (message.length > 20) {
-                    message = message.slice(0, 20) + "...";
-                }
-                const error = new Error(`Are.na request failed (${response.status}): ${message || response.statusText}`);
-                error.status = response.status;
-
-                // Only retry on transient server errors
-                if (isRetryableError(response.status) && attempt < MAX_RETRIES) {
-                    const waitTime = RETRY_BASE_DELAY * Math.pow(2, attempt);
-                    console.log(`Retry ${attempt + 1}/${MAX_RETRIES} after ${waitTime}ms...`);
-                    await delay(waitTime);
-                    continue;
-                }
-                throw error;
-            }
-
-            return response.json();
-        } catch (error) {
-            lastError = error;
-
-            // Check if it's an abort signal - don't retry
-            if (signal?.aborted || error.name === "AbortError") {
-                throw error;
-            }
-
-            // Retry on network errors (no status code = network failure)
-            const isNetworkError = !error.status && (
-                error.message?.includes("fetch") ||
-                error.message?.includes("network") ||
-                error.name === "TypeError"
-            );
-
-            if (isNetworkError && attempt < MAX_RETRIES) {
-                const waitTime = RETRY_BASE_DELAY * Math.pow(2, attempt);
-                console.log(`Network error, retry ${attempt + 1}/${MAX_RETRIES} after ${waitTime}ms...`);
-                await delay(waitTime);
-                continue;
-            }
-
-            throw error;
-        }
+const buildArenaUrl = (item) => {
+    if (!item) return null;
+    if (item.type === "Channel" && item.owner?.slug && item.slug) {
+        return `https://www.are.na/${encodeURIComponent(item.owner.slug)}/${encodeURIComponent(item.slug)}`;
     }
-
-    throw lastError;
+    if (item.id) {
+        return `https://www.are.na/block/${item.id}`;
+    }
+    return null;
 };
 
-const deriveTitle = (block) =>
-    block.title || block.generated_title || block.content || block.source?.title || `Block ${block.id}`;
+const normalizeOwner = (owner) => {
+    if (!owner) return null;
+    return {
+        id: owner.id ? `${owner.id}` : null,
+        type: owner.type || null,
+        name: owner.name || null,
+        slug: owner.slug || null,
+        avatarUrl: safeUrl(owner.avatar),
+        initials: owner.initials || null
+    };
+};
 
-const normalizeType = (block) => block.class || block.base_class || block.kind || "Unknown";
+const normalizeSource = (source) => {
+    if (!source) return null;
+    return {
+        url: safeUrl(source.url),
+        title: source.title || null,
+        provider: source.provider
+            ? {
+                  name: source.provider.name || null,
+                  url: safeUrl(source.provider.url)
+              }
+            : null
+    };
+};
 
-const extractImage = (block) => safeUrl(block.image?.display?.url || block.image?.original?.url);
+const normalizeConnection = (connection) => {
+    if (!connection) return null;
+    return {
+        id: connection.id ? `${connection.id}` : null,
+        position: Number.isFinite(connection.position) ? connection.position : null,
+        pinned: Boolean(connection.pinned),
+        connectedAt: connection.connected_at || null,
+        connectedBy: normalizeOwner(connection.connected_by)
+    };
+};
 
-const extractAttachment = (block) => {
-    if (!block.attachment) return null;
-    const { url, file_name, filename, extension, content_type } = block.attachment;
+const normalizeCounts = (counts) => {
+    if (!counts) return null;
+    return {
+        blocks: Number.isFinite(counts.blocks) ? counts.blocks : 0,
+        channels: Number.isFinite(counts.channels) ? counts.channels : 0,
+        contents: Number.isFinite(counts.contents) ? counts.contents : 0,
+        collaborators: Number.isFinite(counts.collaborators) ? counts.collaborators : 0
+    };
+};
+
+const extractImageVersions = (image) => {
+    if (!image) return null;
+
+    const readVersion = (version) => {
+        if (!version) return null;
+        const src = safeUrl(version.src);
+        const src2x = safeUrl(version.src_2x);
+
+        if (!src && !src2x) {
+            return null;
+        }
+
+        return {
+            src,
+            src2x,
+            width: Number.isFinite(version.width) ? version.width : null,
+            height: Number.isFinite(version.height) ? version.height : null
+        };
+    };
+
+    return {
+        original: {
+            src: safeUrl(image.src),
+            width: Number.isFinite(image.width) ? image.width : null,
+            height: Number.isFinite(image.height) ? image.height : null
+        },
+        small: readVersion(image.small),
+        medium: readVersion(image.medium),
+        large: readVersion(image.large),
+        square: readVersion(image.square)
+    };
+};
+
+const extractImage = (item) =>
+    safeUrl(
+        item.image?.small?.src_2x ||
+        item.image?.small?.src ||
+        item.image?.medium?.src ||
+        item.image?.large?.src ||
+        item.image?.src
+    );
+
+const extractAttachment = (item) => {
+    if (!item.attachment) return null;
+    const { url, filename, file_name, file_extension, extension, content_type, file_size } = item.attachment;
     return {
         url: safeUrl(url),
-        fileName: file_name || filename || null,
-        extension: extension || null,
-        contentType: content_type || null
+        fileName: filename || file_name || null,
+        extension: file_extension || extension || null,
+        contentType: content_type || null,
+        fileSize: Number.isFinite(file_size) ? file_size : null
     };
 };
 
-const extractEmbed = (block) => {
-    if (!block.embed) return null;
-    const { url, src, html, type } = block.embed;
+const extractEmbed = (item) => {
+    if (!item.embed) return null;
+    const { url, html, type, title, author_name, author_url, thumbnail_url, width, height } = item.embed;
     return {
-        url: safeUrl(url || src),
+        url: safeUrl(url),
         html: sanitizeHtml(html || ""),
-        type: type || null
+        type: type || null,
+        title: title || null,
+        authorName: author_name || null,
+        authorUrl: safeUrl(author_url),
+        thumbnailUrl: safeUrl(thumbnail_url),
+        width: Number.isFinite(width) ? width : null,
+        height: Number.isFinite(height) ? height : null
     };
 };
 
-const summarizeBlock = (block, context = {}) => {
-    const type = normalizeType(block);
+const normalizeArenaItem = (item, context = {}) => {
+    const kind = item.type || item.base_type || "Unknown";
+    const descriptionHtml = getRenderedHtml(item.description);
+    const contentHtml = getRenderedHtml(item.content);
+    const descriptionText = getRenderedPlainText(item.description);
+    const contentText = getRenderedPlainText(item.content);
+    const owner = normalizeOwner(item.owner || item.user);
+    const source = normalizeSource(item.source);
+    const sourceChannel = context.sourceChannel || null;
+    const channel = kind === "Channel"
+        ? {
+              title: item.title || null,
+              slug: item.slug || null
+          }
+        : sourceChannel;
+
     return {
-        id: `${block.id}`,
-        slug: block.slug || null,
-        type,
-        title: deriveTitle(block),
-        descriptionHtml: sanitizeHtml(block.description_html || ""),
-        descriptionText: toPlainText(block.description_html || block.description || ""),
-        contentHtml: type === "Text" ? sanitizeHtml(block.content_html || block.content || "") : "",
-        createdAt: block.created_at || null,
-        updatedAt: block.updated_at || null,
-        imageUrl: extractImage(block),
-        linkUrl: safeUrl(block.external_url || block.source?.url),
-        attachment: extractAttachment(block),
-        embed: extractEmbed(block),
-        channel: {
-            title: context.channelTitle || block.connected_to_channel?.title || block.channel?.title || null,
-            slug: context.channelSlug || block.connected_to_channel?.slug || block.channel?.slug || null
-        },
-        author: block.user?.full_name || block.user?.username || null
+        id: `${item.id}`,
+        kind,
+        type: kind,
+        slug: item.slug || null,
+        title: deriveTitle(item),
+        arenaUrl: buildArenaUrl(item),
+        descriptionHtml,
+        descriptionText,
+        contentHtml,
+        contentText,
+        createdAt: item.created_at || null,
+        updatedAt: item.updated_at || null,
+        state: item.state || null,
+        visibility: item.visibility || null,
+        commentCount: Number.isFinite(item.comment_count) ? item.comment_count : 0,
+        owner,
+        author: owner?.name || null,
+        source,
+        linkUrl: source?.url || null,
+        imageUrl: extractImage(item),
+        imageVersions: extractImageVersions(item.image),
+        imageAlt: item.image?.alt_text || null,
+        imageAspectRatio: Number.isFinite(item.image?.aspect_ratio) ? item.image.aspect_ratio : null,
+        attachment: extractAttachment(item),
+        embed: extractEmbed(item),
+        channel,
+        sourceChannel,
+        connection: normalizeConnection(item.connection),
+        counts: normalizeCounts(item.counts)
     };
 };
 
 export const fetchChannelBlocks = async (slug, signal, onProgress) => {
-    const items = [];
-    for (let page = 1; page <= MAX_PAGES; page++) {
-        const data = await fetchJson(`/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${PER_PAGE}`, signal);
-        const contents = data.contents || [];
-        items.push(...contents.map(block => summarizeBlock(block, {
-            channelSlug: slug,
-            channelTitle: data.title
-        })));
+    const [channel, firstPage] = await Promise.all([
+        fetchArenaChannel(slug, { signal }),
+        fetchArenaChannelContentsPage(slug, { page: 1, per: PER_PAGE, sort: "position_asc", signal })
+    ]);
+
+    const totalPages = Math.min(firstPage?.meta?.total_pages || 1, MAX_PAGES);
+    const pageRequests = [];
+
+    for (let page = 2; page <= totalPages; page += 1) {
+        pageRequests.push(
+            fetchArenaChannelContentsPage(slug, { page, per: PER_PAGE, sort: "position_asc", signal })
+                .then((payload) => ({ page, payload }))
+        );
+    }
+
+    const remainingPages = await Promise.all(pageRequests);
+    const orderedPages = [
+        { page: 1, payload: firstPage },
+        ...remainingPages
+    ].sort((left, right) => left.page - right.page);
+
+    const normalized = [];
+    for (const { page, payload } of orderedPages) {
+        const contents = Array.isArray(payload?.data) ? payload.data : [];
+        normalized.push(
+            ...contents.map((item) => normalizeArenaItem(item, {
+                sourceChannel: {
+                    title: channel.title,
+                    slug: channel.slug
+                }
+            }))
+        );
 
         if (typeof onProgress === "function") {
-            onProgress({ slug, page, total: data.length || contents.length });
+            onProgress({
+                slug,
+                page,
+                total: payload?.meta?.total_count || channel.counts?.contents || normalized.length
+            });
         }
-        if (contents.length < PER_PAGE) break;
     }
-    return items;
+
+    return normalized;
 };
 
 export const fetchBlocksById = async (ids, signal) => {
-    const results = [];
-    for (const id of ids) {
-        const data = await fetchJson(`/blocks/${encodeURIComponent(id)}`, signal);
-        results.push(summarizeBlock(data));
-    }
-    return results;
+    const responses = await Promise.all(ids.map((id) => fetchArenaBlock(id, { signal })));
+    return responses.map((item) => normalizeArenaItem(item));
 };
 
 export const buildCache = async ({ channelSlugs = [], blockIds = [], filters = BLOCK_TYPES, signal, onProgress }) => {
@@ -166,7 +254,7 @@ export const buildCache = async ({ channelSlugs = [], blockIds = [], filters = B
 
     const addBlocks = (blocks) => {
         for (const block of blocks) {
-            if (allowedTypes.has(block.type)) {
+            if (allowedTypes.has(block.kind)) {
                 map.set(block.id, block);
             }
         }

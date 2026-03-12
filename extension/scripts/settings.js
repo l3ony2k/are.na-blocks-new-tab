@@ -3,6 +3,7 @@ import { runtime, storage } from "./extension-api.js";
 import { getCache, getSettings, parseBlockIds, parseChannelSlugs, saveSettings } from "./storage.js";
 import { applyTheme } from "./theme.js";
 import { formatRelativeTime } from "./time.js";
+import { refreshCache } from "./cache-refresh.js";
 
 const state = {
     settings: { ...DEFAULT_SETTINGS },
@@ -280,13 +281,9 @@ async function handleSourcesSave(event) {
         } else {
             showStatus("Refreshing cache...");
         }
-        const response = await requestCacheRefresh({ reason: "manual" });
-        if (response?.ok) {
-            const count = response.summary?.blockCount || 0;
-            showStatus(`Cache refreshed with ${count} block${count === 1 ? "" : "s"}.`);
-        } else if (response?.error) {
-            showStatus(`Refresh reported: ${sanitizeErrorLabel(response.error)}`);
-        }
+        const summary = await refreshCache();
+        const count = summary?.blockCount || 0;
+        showStatus(`Cache refreshed with ${count} block${count === 1 ? "" : "s"}.`);
     } catch (error) {
         console.error("Refresh failed", error);
         showStatus(`Refresh failed: ${sanitizeErrorLabel(error.message)}`);
@@ -323,17 +320,6 @@ function updateWorking(isWorking, message) {
     if (message) {
         showStatus(message);
     }
-}
-
-async function requestCacheRefresh(payload = {}) {
-    if (!runtime?.sendMessage) {
-        throw new Error("Background messaging unavailable");
-    }
-    const response = await runtime.sendMessage({
-        type: MESSAGES.refreshCache,
-        payload
-    });
-    return response;
 }
 
 function updateCacheInfo() {
@@ -515,11 +501,9 @@ async function handleSaveAll(event) {
         // Refresh cache if sources changed
         if (state.sourcesDirty) {
             showStatus("Settings saved. Refreshing cache...");
-            const response = await requestCacheRefresh({ reason: "manual" });
-            if (response?.ok) {
-                const count = response.summary?.blockCount || 0;
-                showStatus(`Saved. Cache refreshed with ${count} block${count === 1 ? "" : "s"}.`);
-            }
+            const summary = await refreshCache();
+            const count = summary?.blockCount || 0;
+            showStatus(`Saved. Cache refreshed with ${count} block${count === 1 ? "" : "s"}.`);
         }
     } catch (error) {
         console.error("Save all failed", error);
@@ -531,4 +515,3 @@ async function handleSaveAll(event) {
 }
 
 init();
-

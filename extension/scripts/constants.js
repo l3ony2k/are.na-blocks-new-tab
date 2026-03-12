@@ -16,9 +16,9 @@ export const DEFAULT_SETTINGS = {
     tileSize: "auto"
 };
 
-export const CACHE_VERSION = 1;
+export const CACHE_VERSION = 2;
 
-export const ARENA_API_ROOT = "https://api.are.na/v2";
+export const ARENA_API_ROOT = "https://api.are.na/v3";
 
 export const BLOCK_TYPES = ["Image", "Text", "Link", "Attachment", "Embed", "Channel"];
 

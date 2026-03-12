@@ -1,7 +1,7 @@
 import { runtime } from "./extension-api.js";
-import { buildCache } from "./arena.js";
 import { CACHE_STATE, MESSAGES } from "./constants.js";
-import { getSettings, saveCache, saveCacheMeta, getCache } from "./storage.js";
+import { saveCacheMeta, getCache } from "./storage.js";
+import { refreshCache } from "./cache-refresh.js";
 
 let isRefreshing = false;
 
@@ -23,39 +23,14 @@ async function handleRefreshRequest(options) {
         throw new Error("Cache refresh already in progress");
     }
 
-    const { testOnly = false, settingsOverride = null } = options;
     isRefreshing = true;
 
     try {
-        await updateCacheMeta({ state: CACHE_STATE.working, lastError: null });
-        const settings = settingsOverride || (await getSettings());
-        const cache = await buildCache({
-            channelSlugs: settings.channelSlugs,
-            blockIds: settings.blockIds,
-            filters: settings.filters
+        return await refreshCache({
+            ...options,
+            onStateChange: updateCacheMeta
         });
-
-        if (!testOnly) {
-            await saveCache(cache);
-            await updateCacheMeta({
-                state: CACHE_STATE.idle,
-                lastUpdated: cache.fetchedAt,
-                lastError: null,
-                blockCount: cache.blockIds.length
-            });
-        } else {
-            await updateCacheMeta({
-                state: CACHE_STATE.idle,
-                blockCount: cache.blockIds.length
-            });
-        }
-
-        return {
-            blockCount: cache.blockIds.length,
-            fetchedAt: cache.fetchedAt
-        };
     } catch (error) {
-        await updateCacheMeta({ state: CACHE_STATE.error, lastError: error.message, lastUpdated: Date.now() });
         throw error;
     } finally {
         isRefreshing = false;
