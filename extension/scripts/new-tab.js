@@ -100,7 +100,6 @@ const elements = {
   cacheButton: document.getElementById("cache-status-button"),
   cacheLabel: document.getElementById("cache-label"),
   blockTemplate: document.getElementById("block-card-template"),
-  emptyTemplate: document.querySelector("[data-empty-state]"),
   bookmarkEmptyTemplate: document.getElementById("bookmark-empty-template"),
   bookmarkMenuLayer: document.getElementById("bookmark-menu-layer"),
 };
@@ -170,6 +169,12 @@ const positionMenu = (menu, trigger, offset = BOOKMARK_MENU_OFFSET, isSubMenu = 
 const positionRootMenu = (menu, trigger) => positionMenu(menu, trigger, BOOKMARK_MENU_OFFSET, false);
 const positionSubMenu = (menu, trigger) => positionMenu(menu, trigger, BOOKMARK_SUBMENU_OFFSET, true);
 
+function setPageBootState(status) {
+  if (document.documentElement) {
+    document.documentElement.dataset.pageState = status;
+  }
+}
+
 function repositionOpenMenus() {
   if (!elements.bookmarkMenuLayer || !openBookmarkFolders.size) {
     return;
@@ -187,11 +192,13 @@ async function init() {
     await hydrateState();
     wireEvents();
     await renderAll();
+    setPageBootState("ready");
     await maybeBootstrapCache();
     await maybeRefreshStaleCache();
   } catch (error) {
     console.error("Failed to initialise new tab", error);
     renderError(error);
+    setPageBootState("ready");
   }
 }
 
@@ -310,8 +317,8 @@ async function renderAll() {
 }
 
 function toggleRegions() {
-  const showHeader = Boolean(state.settings?.showHeader);
-  const showFooter = Boolean(state.settings?.showFooter);
+  const showHeader = state.settings?.showHeader !== false;
+  const showFooter = state.settings?.showFooter !== false;
   if (elements.header) {
     elements.header.hidden = !showHeader;
   }
@@ -1281,14 +1288,10 @@ function showEmptyState() {
   }
   container.classList.add("is-empty");
   container.innerHTML = "";
-  if (elements.emptyTemplate) {
-    container.appendChild(elements.emptyTemplate.cloneNode(true));
-  } else {
-    const fallback = document.createElement("div");
-    fallback.className = "block-empty";
-    fallback.textContent = "No cached blocks yet. Configure sources in settings.";
-    container.appendChild(fallback);
-  }
+  const emptyState = document.createElement("div");
+  emptyState.className = "block-empty";
+  emptyState.textContent = "Configure channels or blocks in settings to start seeing content.";
+  container.appendChild(emptyState);
   contentArea.classList.remove("is-scroll-y", "is-scroll-x");
   contentArea.style.overflow = "hidden";
   contentArea.style.overflowX = "hidden";
@@ -1574,7 +1577,7 @@ function handleStorageChange(changes, area) {
     getCache().then(({ cache, meta }) => {
       state.cache = cache;
       state.cacheMeta = { ...state.cacheMeta, ...meta };
-      if (!state.currentBlocks.length) {
+      if (!state.currentBlocks.length || !elements.blocksContainer?.childElementCount || elements.blocksContainer.classList.contains("is-empty")) {
         renderBlocks();
       }
       updateCacheStatus();

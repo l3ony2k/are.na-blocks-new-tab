@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-page-state="booting">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,19 +9,15 @@
 </head>
 <body data-page="new-tab">
     <div id="app-shell">
-        <header id="header-bar" aria-label="Bookmarks bar">
+        <header id="header-bar" aria-label="Bookmarks bar" hidden>
             <div id="bookmark-strip" data-state="loading" aria-live="polite"></div>
         </header>
 
         <main id="content-area">
-            <section id="blocks-container" aria-live="polite">
-                <div class="block-empty" data-empty-state>
-                    Configure channels or blocks in settings to start seeing content.
-                </div>
-            </section>
+            <section id="blocks-container" aria-live="polite"></section>
         </main>
 
-        <footer id="footer-bar" aria-label="Extension footer">
+        <footer id="footer-bar" aria-label="Extension footer" hidden>
             <button class="button status-button" id="cache-status-button" type="button">
                 <span id="cache-label">Cache idle</span>
             </button>

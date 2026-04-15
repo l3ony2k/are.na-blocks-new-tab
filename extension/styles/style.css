@@ -101,6 +101,11 @@ body ::-moz-selection {
     height: 100%;
 }
 
+html[data-page-state="booting"] body[data-page="new-tab"] #app-shell,
+html[data-page-state="booting"] body[data-page="new-tab"] #bookmark-menu-layer {
+    visibility: hidden;
+}
+
 /* --- Header / Bookmark Bar ------------------------------------------------- */
 #header-bar {
     height: 35px;
